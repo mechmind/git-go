@@ -26,8 +26,12 @@ type ObjectInfo struct {
 type Repo interface {
     // raw object operations
     OpenObject(hash string) (ObjectInfo, io.ReadCloser, error)
-    CreateObject(size int64) (io.WriteCloser, error)
+    CreateObject(objType int8, size uint64) (ObjectWriter, error)
     IsObjectExists(hash string) bool
 }
 
+type ObjectWriter interface {
+    io.WriteCloser
+    Id() string
+}
 
