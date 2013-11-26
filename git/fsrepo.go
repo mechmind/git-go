@@ -14,7 +14,7 @@ import (
 )
 
 
-const HEADER_BUFFER = 28
+const HEADER_BUFFER = 30
 
 var ErrObjectNotFound = errors.New("object not found")
 
@@ -34,7 +34,6 @@ func OpenRepo(dir string) (Repo, error) {
 
 func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
     // only opens loose objects now
-    println(r.getObjectPath(hash))
     if ! r.IsObjectExists(hash) {
         return ObjectInfo{}, nil, ErrObjectNotFound
     }
