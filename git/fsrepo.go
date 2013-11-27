@@ -57,7 +57,7 @@ func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 
     objectInfo.Hash = hash
 
-    return objectInfo, reader, nil
+    return objectInfo, newObjectReader(reader, objectInfo.Size), nil
 }
 
 func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
@@ -87,9 +87,7 @@ func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
         return nil, err
     }
 
-    writer := newObjectWriter(tmpFile, r)
-
-    // write header
+    // create header
     header := make([]byte, HEADER_BUFFER)
     pos := copy(header, []byte(objTypeName))
     header[pos] = ' '
@@ -97,7 +95,9 @@ func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
     pos += copy(header[pos:], []byte(strconv.FormatUint(size, 10)))
     header[pos] = 0
     header = header[:pos + 1]
-    println(string(header))
+
+    writer := newObjectWriter(tmpFile, size + uint64(len(header)), r)
+
     if _, err = writer.Write(header); err != nil {
         writer.closeWriters()
         os.Remove(tmpFile.Name())
@@ -106,6 +106,7 @@ func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
 
     return writer, nil
 }
+
 
 func (r *FSRepo) IsObjectExists(hash string) bool {
     if _, err := os.Stat(r.getObjectPath(hash)); err != nil {
@@ -134,34 +135,56 @@ func (r *FSRepo) insertObject(hash string, fileName string) error {
     return os.Rename(fileName, objectFileName)
 }
 
+type objectReader struct {
+    source io.ReadCloser
+    io.Reader
+}
+
+func (o objectReader) Close() error {
+    return o.source.Close()
+}
+
+func newObjectReader(source io.ReadCloser, size uint64) objectReader {
+    // FIXME: reimplement limitreader to use uint64 for strict compatibility
+    return objectReader{source, io.LimitReader(source, int64(size))}
+}
+
 type objectWriter struct {
     repo *FSRepo
     file *os.File
     zlibWriter *zlib.Writer
     hashWriter hash.Hash
     id string
-    io.Writer
+    io.WriteCloser
 }
 
-func newObjectWriter(file *os.File, repo *FSRepo) *objectWriter {
+func newObjectWriter(file *os.File, size uint64, repo *FSRepo) *objectWriter {
     zw := zlib.NewWriter(file)
     hw := sha1.New()
-    allw := io.MultiWriter(hw, zw)
+    allw := &exactSizeWriter{size, io.MultiWriter(hw, zw)}
     return &objectWriter{repo, file, zw, hw, "", allw}
 }
 
 func (ob *objectWriter) closeWriters() error {
-    err := ob.zlibWriter.Close()
-    err2 := ob.file.Close()
-    if err != nil {
-        return err
+    err1 := ob.WriteCloser.Close()
+    err2 := ob.zlibWriter.Close()
+    err3 := ob.file.Close()
+    if err1 != nil {
+        return err1
     }
-    return err2
+    if err2 != nil {
+        return err2
+    }
+    return err3
 }
 
 
 func (ob *objectWriter) Close() error {
-    ob.closeWriters()
+    err := ob.closeWriters()
+    if err != nil {
+        os.Remove(ob.file.Name())
+        return err
+    }
     ob.id = fmt.Sprintf("%x", ob.hashWriter.Sum(nil))
 
     // insert object into repo storage
