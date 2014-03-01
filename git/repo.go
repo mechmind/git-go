@@ -2,6 +2,7 @@ package git
 
 import (
     "io"
+    "errors"
 )
 
 const (
@@ -10,6 +11,11 @@ const (
     TYPE_COMMIT
     TYPE_TAG
     TYPE_UNKNOWN
+)
+
+var (
+    ERR_INVALID_REF = errors.New("invalid reference")
+    ERR_NOT_A_SYMBOLIC_REF = errors.New("not a symbolic reference")
 )
 
 
@@ -28,6 +34,14 @@ type Repo interface {
     OpenObject(hash string) (ObjectInfo, io.ReadCloser, error)
     CreateObject(objType int8, size uint64) (ObjectWriter, error)
     IsObjectExists(hash string) bool
+
+    // ref operations
+    ReadRef(name string) (string, error)
+    UpdateRef(src, dest string) error
+
+    // symbolic ref operations
+    ReadSymbolicRef(name string) (string, error)
+    UpdateSymbolicRef(src, dest string) error
 }
 
 type ObjectWriter interface {

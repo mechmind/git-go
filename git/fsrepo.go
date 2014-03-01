@@ -11,6 +11,7 @@ import (
     "os"
     "path/filepath"
     "strconv"
+    "strings"
 )
 
 
@@ -115,6 +116,94 @@ func (r *FSRepo) IsObjectExists(hash string) bool {
     return true
 }
 
+
+func readRefFile(gitDir, name string) (string, error) {
+    path := filepath.Join(gitDir, name)
+    if _, err := os.Stat(path); err != nil {
+        return "", err
+    }
+
+    file, err := os.Open(path)
+    defer file.Close()
+    if err != nil {
+        return "", err
+    }
+
+    data, err := ioutil.ReadAll(file)
+    return string(data), err
+}
+
+func writeRefFile(gitDir, name, value string) error {
+    path := filepath.Join(gitDir, name)
+    dir := filepath.Dir(path)
+    _, err := os.Stat(dir)
+    switch {
+    case os.IsNotExist(err):
+        // make ref dirs
+        err2 := os.MkdirAll(dir, os.ModeDir | 0777)
+        if err2 != nil {
+            return err2
+        }
+    case err != nil:
+        return err
+    }
+
+    file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0666)
+    if err != nil {
+        return err
+    }
+    _, err = file.WriteString(value)
+    if err != nil{
+        return err
+    }
+
+    return file.Close()
+}
+
+
+func (r *FSRepo) ReadRef(ref string) (string, error) {
+    // read refs till object found
+    for {
+        value, err := readRefFile(r.gitDir, ref)
+        if err != nil {
+            return "", err
+        }
+        if strings.HasPrefix(value, "ref: ") {
+            // symbolic ref, following
+            ref = value[4:]
+        } else {
+            // found hash 
+            return value, nil
+        }
+    }
+}
+
+func (r *FSRepo) UpdateRef(ref, value string) error {
+    // update existing ref or create one
+    // FIXME: check that value is a hash
+    return writeRefFile(r.gitDir, ref, value)
+}
+
+func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
+    // read symbolic ref. Returns error if ref is not symbolic
+    value, err := readRefFile(r.gitDir, ref)
+    if err != nil {
+        return "", err
+    }
+
+    if strings.HasPrefix(value, "ref: ") {
+        return value[4:], nil
+    } else {
+        return "", ERR_NOT_A_SYMBOLIC_REF
+    }
+}
+
+func (r *FSRepo) UpdateSymbolicRef(ref, value string) error {
+    // update symbolic reference or create one
+    // FIXME: check that value is an existing ref?
+
+    return writeRefFile(r.gitDir, ref, "ref: " + value)
+}
 
 func (r *FSRepo) getObjectPath(hash string) string {
     if len(hash) < 2 {

@@ -22,6 +22,7 @@ func (e *exactSizeWriter) Write(data []byte) (n int, err error) {
     }
 
     if length > e.bytesLeft {
+        // FIXME: should be instant fail
         // write remaining chunk and return overflow error
         println("want to write ", length, " bytes, but left only ", e.bytesLeft)
         data = data[:int(e.bytesLeft)]
