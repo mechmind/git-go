@@ -13,6 +13,11 @@ const (
     TYPE_UNKNOWN
 )
 
+const (
+    KIND_BRANCH = iota
+    KIND_TAG
+)
+
 var (
     ERR_INVALID_REF = errors.New("invalid reference")
     ERR_NOT_A_SYMBOLIC_REF = errors.New("not a symbolic reference")
@@ -42,6 +47,9 @@ type Repo interface {
     // symbolic ref operations
     ReadSymbolicRef(name string) (string, error)
     UpdateSymbolicRef(src, dest string) error
+
+    // ref list
+    ListRefs(kind int) ([]string, error)
 }
 
 type ObjectWriter interface {

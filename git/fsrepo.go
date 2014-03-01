@@ -33,6 +33,13 @@ func OpenRepo(dir string) (Repo, error) {
     return &FSRepo{gitDir}, nil
 }
 
+func OpenBareRepo(dir string) (Repo, error) {
+    if _, err := os.Stat(dir); err != nil {
+        return nil, err
+    }
+    return &FSRepo{dir}, nil
+}
+
 func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
     // only opens loose objects now
     if ! r.IsObjectExists(hash) {
@@ -203,6 +210,35 @@ func (r *FSRepo) UpdateSymbolicRef(ref, value string) error {
     // FIXME: check that value is an existing ref?
 
     return writeRefFile(r.gitDir, ref, "ref: " + value)
+}
+
+
+func (r *FSRepo) ListRefs(kind int) ([]string, error) {
+    baseDir := filepath.Join(r.gitDir, "refs")
+    switch kind {
+    case KIND_BRANCH:
+        baseDir = filepath.Join(baseDir, "heads")
+    case KIND_TAG:
+        baseDir = filepath.Join(baseDir, "tags")
+    default:
+        return nil, errors.New("invalid ref kind")
+    }
+    // FIXME: refs with slashes
+    if _, err := os.Stat(baseDir); os.IsNotExist(err) {
+        // no dir, no refs
+        return nil, nil
+    }
+
+    fileList, err := ioutil.ReadDir(baseDir)
+    if err != nil {
+        return nil, err
+    }
+
+    names := make([]string, len(fileList))
+    for idx, info := range fileList {
+        names[idx] = info.Name()
+    }
+    return names, nil
 }
 
 func (r *FSRepo) getObjectPath(hash string) string {
