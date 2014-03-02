@@ -172,12 +172,13 @@ func (r *FSRepo) ReadRef(ref string) (string, error) {
     // read refs till object found
     for {
         value, err := readRefFile(r.gitDir, ref)
+        value = strings.TrimSpace(value)
         if err != nil {
             return "", err
         }
         if strings.HasPrefix(value, "ref: ") {
             // symbolic ref, following
-            ref = value[4:]
+            ref = value[5:]
         } else {
             // found hash 
             return value, nil
@@ -194,12 +195,13 @@ func (r *FSRepo) UpdateRef(ref, value string) error {
 func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
     // read symbolic ref. Returns error if ref is not symbolic
     value, err := readRefFile(r.gitDir, ref)
+    value = strings.TrimSpace(value)
     if err != nil {
         return "", err
     }
 
     if strings.HasPrefix(value, "ref: ") {
-        return value[4:], nil
+        return value[5:], nil
     } else {
         return "", ERR_NOT_A_SYMBOLIC_REF
     }

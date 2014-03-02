@@ -9,15 +9,18 @@ import (
 
 const TREE_ENTRY_BUFFER = 1024
 
+const (
+    TREE_MODE_DIR = 040000
+)
 
 type Tree struct {
-    items []TreeItem
+    Items []TreeItem
 }
 
 type TreeItem struct {
-    name string
-    mode uint32
-    hash string
+    Name string
+    Mode uint32
+    Hash string
 }
 
 func ReadTree(obj io.ReadCloser) (*Tree, error) {
@@ -44,7 +47,7 @@ func ReadTree(obj io.ReadCloser) (*Tree, error) {
             return nil, err
         }
 
-        item.mode = uint32(mode)
+        item.Mode = uint32(mode)
 
         // read name
         buf, err = scanUntil(obj, 0, infobuf)
@@ -52,7 +55,7 @@ func ReadTree(obj io.ReadCloser) (*Tree, error) {
             return nil, err
         }
 
-        item.name = string(buf)
+        item.Name = string(buf)
 
         // read hash
 
@@ -61,8 +64,8 @@ func ReadTree(obj io.ReadCloser) (*Tree, error) {
             return nil, err
         }
 
-        item.hash = fmt.Sprintf("%x", hashbuf)
-        tree.items = append(tree.items, item)
+        item.Hash = fmt.Sprintf("%x", hashbuf)
+        tree.Items = append(tree.Items, item)
     }
     return tree, nil
 }
