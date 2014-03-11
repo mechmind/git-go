@@ -94,7 +94,7 @@ func (o FileStore) WriteRef(ref string, contents string) error {
 }
 
 func (o FileStore) ListRefs(ns string) ([]string, error) {
-	baseDir := filepath.Join(o.gitDir, "refs")
+	baseDir := filepath.Join(o.gitDir, "refs", ns)
 	// FIXME: refs with slashes
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
 		// no dir, no refs
