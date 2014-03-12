@@ -10,10 +10,10 @@ type FsFileAbstraction interface {
 }
 
 type FsAbstraction interface {
-	OpenFile(path string) (FsFileAbstraction, error)
-	EnsureFile(path string) (FsFileAbstraction, error)
-	TmpFile() (FsFileAbstraction, error)
-	Move(from FsFileAbstraction, to FsFileAbstraction) error
+	Open(path string) (FsFileAbstraction, error)
+	Create(path string) (FsFileAbstraction, error)
+	TempFile() (FsFileAbstraction, error)
+	Move(from string, to string) error
 	ListDir(path string) ([]string, error)
 	IsFileExist(path string) bool
 }

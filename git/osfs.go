@@ -10,11 +10,11 @@ type OsFs struct {
 	root string
 }
 
-func (o OsFs) OpenFile(path string) (FsFileAbstraction, error) {
+func (o OsFs) Open(path string) (FsFileAbstraction, error) {
 	return os.Open(filepath.Join(o.root, path))
 }
 
-func (o OsFs) EnsureFile(path string) (FsFileAbstraction, error) {
+func (o OsFs) Create(path string) (FsFileAbstraction, error) {
 	path = filepath.Join(o.root, path)
 	base := filepath.Dir(path)
 	if _, err := os.Stat(base); os.IsNotExist(err) {
@@ -27,7 +27,7 @@ func (o OsFs) EnsureFile(path string) (FsFileAbstraction, error) {
 	return os.Create(path)
 }
 
-func (o OsFs) TmpFile() (FsFileAbstraction, error) {
+func (o OsFs) TempFile() (FsFileAbstraction, error) {
 	tmp, err := ioutil.TempFile(o.root, "tmpgitgo.")
 	if err != nil {
 		return nil, err
@@ -36,8 +36,13 @@ func (o OsFs) TmpFile() (FsFileAbstraction, error) {
 	return &tmpFileRemover{tmp}, nil
 }
 
-func (o OsFs) Move(f FsFileAbstraction, t FsFileAbstraction) error {
-	return os.Rename(f.Name(), t.Name())
+func (o OsFs) Move(from string, to string) error {
+	dst, err := o.Create(filepath.Join(o.root, to))
+	if err != nil {
+		return err
+	}
+
+	return os.Rename(from, dst.Name())
 }
 
 func (o OsFs) ListDir(path string) ([]string, error) {

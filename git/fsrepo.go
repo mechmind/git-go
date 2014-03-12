@@ -32,7 +32,7 @@ func OpenFsRepo(fs FsAbstraction) (Repo, error) {
 func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 	// only opens loose objects now
 	path := filepath.Join("objects", hash[:2], hash[2:])
-	file, err := r.fs.OpenFile(path)
+	file, err := r.fs.Open(path)
 	if err != nil {
 		return ObjectInfo{}, nil, err
 	}
@@ -77,7 +77,7 @@ func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
 	header[pos] = 0
 	header = header[:pos+1]
 
-	tmp, err := r.fs.TmpFile()
+	tmp, err := r.fs.TempFile()
 	if err != nil {
 		return nil, err
 	}
@@ -152,13 +152,8 @@ func (r *FSRepo) IsObjectExists(hash string) bool {
 }
 
 func (r *FSRepo) insertObject(hash string, src FsFileAbstraction) error {
-	path := filepath.Join("objects", hash[:2], hash[2:])
-	dst, err := r.fs.EnsureFile(path)
-	if err != nil {
-		return err
-	}
-
-	return r.fs.Move(src, dst)
+	target := filepath.Join("objects", hash[:2], hash[2:])
+	return r.fs.Move(src.Name(), target)
 }
 
 type objectReader struct {
@@ -280,7 +275,7 @@ func scanUntil(src io.Reader, needle byte, buf []byte) ([]byte, error) {
 }
 
 func readRefFile(fs FsAbstraction, path string) (string, error) {
-	file, err := fs.OpenFile(path)
+	file, err := fs.Open(path)
 	if err != nil {
 		return "", err
 	}
@@ -295,7 +290,7 @@ func readRefFile(fs FsAbstraction, path string) (string, error) {
 }
 
 func writeRefFile(fs FsAbstraction, path string, data string) error {
-	file, err := fs.EnsureFile(path)
+	file, err := fs.Create(path)
 	if err != nil {
 		return err
 	}
