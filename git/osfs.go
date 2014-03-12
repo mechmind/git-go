@@ -55,7 +55,7 @@ func (o OsFs) ListDir(path string) ([]string, error) {
 
 	names := make([]string, len(fileList))
 	for idx, info := range fileList {
-		names[idx] = info.Name()
+		names[idx] = filepath.Join(path, info.Name())
 	}
 	return names, nil
 }

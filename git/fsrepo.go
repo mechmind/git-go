@@ -113,12 +113,12 @@ func (r *FSRepo) ReadRef(ref string) (string, error) {
 func (r *FSRepo) UpdateRef(ref, value string) error {
 	// update existing ref or create one
 	// FIXME: check that value is a hash
-	return writeRefFile(r.fs, filepath.Join("refs", ref), value)
+	return writeRefFile(r.fs, ref, value)
 }
 
 func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
 	// read symbolic ref. Returns error if ref is not symbolic
-	value, err := readRefFile(r.fs, filepath.Join("refs", ref))
+	value, err := readRefFile(r.fs, ref)
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +133,7 @@ func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
 func (r *FSRepo) UpdateSymbolicRef(ref, value string) error {
 	// update symbolic reference or create one
 	// FIXME: check that value is an existing ref?
-	return writeRefFile(r.fs, filepath.Join("refs", ref), "ref: "+value)
+	return writeRefFile(r.fs, ref, "ref: "+value)
 }
 
 func (r *FSRepo) ListRefs(kind int) ([]string, error) {
