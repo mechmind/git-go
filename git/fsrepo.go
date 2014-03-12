@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -16,25 +18,26 @@ const HEADER_BUFFER = 30
 var ErrObjectNotFound = errors.New("object not found")
 
 type FSRepo struct {
-	store Store
+	fs FsAbstraction
 }
 
 func OpenRepo(gitDir string) (Repo, error) {
-	return OpenStoredRepo(NewFileStore(gitDir))
+	return OpenFsRepo(&OsFs{gitDir})
 }
 
-func OpenStoredRepo(store Store) (Repo, error) {
-	return &FSRepo{store}, nil
+func OpenFsRepo(fs FsAbstraction) (Repo, error) {
+	return &FSRepo{fs}, nil
 }
 
 func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 	// only opens loose objects now
-	rawReader, err := r.store.NewRawObjectReader(hash)
+	path := filepath.Join("objects", hash[:2], hash[2:])
+	file, err := r.fs.OpenFile(path)
 	if err != nil {
 		return ObjectInfo{}, nil, err
 	}
 
-	reader, err := zlib.NewReader(rawReader)
+	reader, err := zlib.NewReader(file)
 	if err != nil {
 		return ObjectInfo{}, nil, err
 	}
@@ -74,12 +77,12 @@ func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
 	header[pos] = 0
 	header = header[:pos+1]
 
-	ow, err := r.store.NewRawObjectWriter()
+	tmp, err := r.fs.TmpFile()
 	if err != nil {
 		return nil, err
 	}
 
-	writer := newObjectWriter(ow, size+uint64(len(header)), r)
+	writer := newObjectWriter(tmp, size+uint64(len(header)), r)
 
 	if _, err = writer.Write(header); err != nil {
 		writer.closeWriters()
@@ -92,10 +95,11 @@ func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
 func (r *FSRepo) ReadRef(ref string) (string, error) {
 	// read refs till object found
 	for {
-		value, err := r.store.ReadRef(ref)
+		value, err := readRefFile(r.fs, ref)
 		if err != nil {
 			return "", err
 		}
+
 		if strings.HasPrefix(value, "ref: ") {
 			// symbolic ref, following
 			ref = value[5:]
@@ -109,12 +113,12 @@ func (r *FSRepo) ReadRef(ref string) (string, error) {
 func (r *FSRepo) UpdateRef(ref, value string) error {
 	// update existing ref or create one
 	// FIXME: check that value is a hash
-	return r.store.WriteRef(ref, value)
+	return writeRefFile(r.fs, filepath.Join("refs", ref), value)
 }
 
 func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
 	// read symbolic ref. Returns error if ref is not symbolic
-	value, err := r.store.ReadRef(ref)
+	value, err := readRefFile(r.fs, filepath.Join("refs", ref))
 	if err != nil {
 		return "", err
 	}
@@ -129,32 +133,32 @@ func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
 func (r *FSRepo) UpdateSymbolicRef(ref, value string) error {
 	// update symbolic reference or create one
 	// FIXME: check that value is an existing ref?
-
-	return r.store.WriteRef(ref, "ref: "+value)
+	return writeRefFile(r.fs, filepath.Join("refs", ref), "ref: "+value)
 }
 
 func (r *FSRepo) ListRefs(kind int) ([]string, error) {
 	switch kind {
 	case KIND_BRANCH:
-		return r.store.ListRefs("heads")
+		return r.fs.ListDir("refs/heads")
 	case KIND_TAG:
-		return r.store.ListRefs("tags")
+		return r.fs.ListDir("refs/tags")
 	default:
 		return nil, errors.New("invalid ref kind")
 	}
 }
 
 func (r *FSRepo) IsObjectExists(hash string) bool {
-	if o, err := r.store.NewRawObjectReader(hash); err != nil {
-		return false
-	} else {
-		o.Close()
-	}
-	return true
+	return r.fs.IsFileExist(filepath.Join("objects", hash))
 }
 
-func (r *FSRepo) insertObject(hash string, src io.ReadWriteCloser) error {
-	return r.store.StoreObject(hash, src)
+func (r *FSRepo) insertObject(hash string, src FsFileAbstraction) error {
+	path := filepath.Join("objects", hash[:2], hash[2:])
+	dst, err := r.fs.EnsureFile(path)
+	if err != nil {
+		return err
+	}
+
+	return r.fs.Move(src, dst)
 }
 
 type objectReader struct {
@@ -173,14 +177,14 @@ func newObjectReader(source io.ReadCloser, size uint64) objectReader {
 
 type objectWriter struct {
 	repo       *FSRepo
-	file       io.ReadWriteCloser
+	file       FsFileAbstraction
 	zlibWriter *zlib.Writer
 	hashWriter hash.Hash
 	id         string
 	io.WriteCloser
 }
 
-func newObjectWriter(file io.ReadWriteCloser, size uint64, repo *FSRepo) *objectWriter {
+func newObjectWriter(file FsFileAbstraction, size uint64, repo *FSRepo) *objectWriter {
 	zw := zlib.NewWriter(file)
 	hw := sha1.New()
 	allw := &exactSizeWriter{size, io.MultiWriter(hw, zw)}
@@ -188,10 +192,16 @@ func newObjectWriter(file io.ReadWriteCloser, size uint64, repo *FSRepo) *object
 }
 
 func (ob *objectWriter) closeWriters() error {
+	//err := ob.file.Close()
+	//if err != nil {
+	//    return err
+	//}
+
 	err := ob.WriteCloser.Close()
 	if err != nil {
 		return err
 	}
+
 	err = ob.zlibWriter.Close()
 	if err != nil {
 		return err
@@ -267,4 +277,31 @@ func scanUntil(src io.Reader, needle byte, buf []byte) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("buffer depleted")
+}
+
+func readRefFile(fs FsAbstraction, path string) (string, error) {
+	file, err := fs.OpenFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	value := strings.TrimSpace(string(data))
+	return value, nil
+}
+
+func writeRefFile(fs FsAbstraction, path string, data string) error {
+	file, err := fs.EnsureFile(path)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+	_, err = file.Write([]byte(data))
+
+	return err
 }
