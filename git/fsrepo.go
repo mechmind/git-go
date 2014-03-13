@@ -18,14 +18,14 @@ const HEADER_BUFFER = 30
 var ErrObjectNotFound = errors.New("object not found")
 
 type FSRepo struct {
-	fs FsAbstraction
+	fs Fs
 }
 
 func OpenRepo(gitDir string) (Repo, error) {
 	return OpenFsRepo(&OsFs{gitDir})
 }
 
-func OpenFsRepo(fs FsAbstraction) (Repo, error) {
+func OpenFsRepo(fs Fs) (Repo, error) {
 	return &FSRepo{fs}, nil
 }
 
@@ -144,7 +144,7 @@ func (r *FSRepo) IsObjectExists(hash string) bool {
 	return r.fs.IsFileExist(filepath.Join("objects", hash))
 }
 
-func (r *FSRepo) insertObject(hash string, src FsFileAbstraction) error {
+func (r *FSRepo) insertObject(hash string, src FsFile) error {
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.Move(src.Name(), target)
 }
@@ -165,14 +165,14 @@ func newObjectReader(source io.ReadCloser, size uint64) objectReader {
 
 type objectWriter struct {
 	repo       *FSRepo
-	file       FsFileAbstraction
+	file       FsFile
 	zlibWriter *zlib.Writer
 	hashWriter hash.Hash
 	id         string
 	io.WriteCloser
 }
 
-func newObjectWriter(file FsFileAbstraction, size uint64, repo *FSRepo) *objectWriter {
+func newObjectWriter(file FsFile, size uint64, repo *FSRepo) *objectWriter {
 	zw := zlib.NewWriter(file)
 	hw := sha1.New()
 	allw := &exactSizeWriter{size, io.MultiWriter(hw, zw)}
@@ -267,7 +267,7 @@ func scanUntil(src io.Reader, needle byte, buf []byte) ([]byte, error) {
 	return nil, errors.New("buffer depleted")
 }
 
-func readRefFile(fs FsAbstraction, path string) (string, error) {
+func readRefFile(fs Fs, path string) (string, error) {
 	file, err := fs.Open(path)
 	if err != nil {
 		return "", err
@@ -282,7 +282,7 @@ func readRefFile(fs FsAbstraction, path string) (string, error) {
 	return value, nil
 }
 
-func writeRefFile(fs FsAbstraction, path string, data string) error {
+func writeRefFile(fs Fs, path string, data string) error {
 	file, err := fs.Create(path)
 	if err != nil {
 		return err

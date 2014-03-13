@@ -10,11 +10,11 @@ type OsFs struct {
 	root string
 }
 
-func (o OsFs) Open(path string) (FsFileAbstraction, error) {
+func (o OsFs) Open(path string) (FsFile, error) {
 	return os.Open(filepath.Join(o.root, path))
 }
 
-func (o OsFs) Create(path string) (FsFileAbstraction, error) {
+func (o OsFs) Create(path string) (FsFile, error) {
 	path = filepath.Join(o.root, path)
 	base := filepath.Dir(path)
 	if _, err := os.Stat(base); os.IsNotExist(err) {
@@ -27,7 +27,7 @@ func (o OsFs) Create(path string) (FsFileAbstraction, error) {
 	return os.Create(path)
 }
 
-func (o OsFs) TempFile() (FsFileAbstraction, error) {
+func (o OsFs) TempFile() (FsFile, error) {
 	tmp, err := ioutil.TempFile(o.root, "tmpgitgo.")
 	if err != nil {
 		return nil, err

@@ -4,15 +4,15 @@ import (
 	"io"
 )
 
-type FsFileAbstraction interface {
+type FsFile interface {
 	Name() string
 	io.ReadWriteCloser
 }
 
-type FsAbstraction interface {
-	Open(path string) (FsFileAbstraction, error)
-	Create(path string) (FsFileAbstraction, error)
-	TempFile() (FsFileAbstraction, error)
+type Fs interface {
+	Open(path string) (FsFile, error)
+	Create(path string) (FsFile, error)
+	TempFile() (FsFile, error)
 	Move(from string, to string) error
 	ListDir(path string) ([]string, error)
 	IsFileExist(path string) bool
