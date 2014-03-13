@@ -48,7 +48,7 @@ type Repo interface {
 	UpdateSymbolicRef(src, dest string) error
 
 	// ref list
-	ListRefs(kind int) ([]string, error)
+	ListRefs(ns string) ([]string, error)
 }
 
 type ObjectWriter interface {

@@ -136,15 +136,8 @@ func (r *FSRepo) UpdateSymbolicRef(ref, value string) error {
 	return writeRefFile(r.fs, ref, "ref: "+value)
 }
 
-func (r *FSRepo) ListRefs(kind int) ([]string, error) {
-	switch kind {
-	case KIND_BRANCH:
-		return r.fs.ListDir("refs/heads")
-	case KIND_TAG:
-		return r.fs.ListDir("refs/tags")
-	default:
-		return nil, errors.New("invalid ref kind")
-	}
+func (r *FSRepo) ListRefs(ns string) ([]string, error) {
+	return r.fs.ListDir(filepath.Join("refs", ns))
 }
 
 func (r *FSRepo) IsObjectExists(hash string) bool {
