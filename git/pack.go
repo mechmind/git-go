@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"io/ioutil"
 )
 
-const PACK_V2_MAGIC = -9162653 // decoded int value of '\377t0c'
+const PACK_V2_MAGIC = -9154717 // decoded int value of '\377t0c'
 var ErrInvalidPackVersion = errors.New("invalid pack version")
 var ErrInvalidPackLength = errors.New("invalid pack length")
 var ErrInvalidPackFileHeader = errors.New("invalid pack file header")
@@ -161,7 +162,7 @@ func (i *IDXFile) LookupObject(hash string) int64 {
 	return offset
 }
 
-func ReadIDXFile(src io.ReadSeeker) (*IDXFile, error) {
+func ReadIDXFile(src io.Reader) (*IDXFile, error) {
 	var magic int32
 
 	// read first value
@@ -180,6 +181,7 @@ func ReadIDXFile(src io.ReadSeeker) (*IDXFile, error) {
 }
 
 func readV1IDXFile(src io.Reader) (*IDXFile, error) {
+	println("reading v1 index file")
 	idx := &IDXFile{}
 
 	// skip to last (256) fanout entry
@@ -216,10 +218,12 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 		idx.offsets[bytes2hash(hash)] = int64(offset)
 	}
 
+
 	return idx, nil
 }
 
 func readV2IDXFile(src io.Reader) (*IDXFile, error) {
+	println("reading v2 index file")
 	var idx = &IDXFile{}
 
 	var version int32
@@ -233,7 +237,7 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 	}
 
 	// skip to last (256) fanout entry
-	_, err = io.CopyN(ioutil.Discard, src, 254 * 4)
+	_, err = io.CopyN(ioutil.Discard, src, 255 * 4)
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +314,48 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 type Pack struct {
 	pack PackFile
 	idx *IDXFile
+}
+
+func OpenPack(idxFile, packFile io.ReadCloser) (*Pack, error) {
+	idx, err := ReadIDXFile(idxFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var pack PackFile
+	if seekablePackFile, ok := packFile.(ReadSeekCloser); ok {
+		pack, err = OpenPackFile(seekablePackFile)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		pack, err = LoadPackFile(packFile)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &Pack{pack, idx}, nil
+}
+
+func (p *Pack) HasObject(hash string) bool {
+	return p.idx.LookupObject(hash) != -1
+}
+
+func (p *Pack) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
+	offset := p.idx.LookupObject(hash)
+
+	info, data, err := p.pack.OpenObjectAt(offset)
+	if err != nil {
+		return ObjectInfo{}, nil, err
+	}
+
+	info.Hash = hash
+	zlibReader, err := zlib.NewReader(data)
+	if err != nil {
+		return ObjectInfo{}, nil, err
+	}
+
+	return info, newObjectReader(zlibReader, info.Size), nil
 }
 
 func hash2bytes(hash string) []byte {

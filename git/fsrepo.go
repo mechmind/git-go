@@ -19,6 +19,7 @@ var ErrObjectNotFound = errors.New("object not found")
 
 type FSRepo struct {
 	fs Fs
+	packs map[string]*Pack
 }
 
 func OpenRepo(gitDir string) (Repo, error) {
@@ -26,12 +27,23 @@ func OpenRepo(gitDir string) (Repo, error) {
 }
 
 func OpenFsRepo(fs Fs) (Repo, error) {
-	return &FSRepo{fs}, nil
+	repo := &FSRepo{fs, make(map[string]*Pack)}
+	// load packs
+	err := repo.scanPacks()
+	return repo, err
 }
 
 func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
-	// only opens loose objects now
 	path := filepath.Join("objects", hash[:2], hash[2:])
+	if ! r.fs.IsFileExist(path) {
+		// lookup object in packs
+		for _, pack := range r.packs {
+			if pack.HasObject(hash) {
+				return pack.OpenObject(hash)
+			}
+		}
+		return ObjectInfo{}, nil, ErrObjectNotFound
+	}
 	file, err := r.fs.Open(path)
 	if err != nil {
 		return ObjectInfo{}, nil, err
@@ -147,6 +159,49 @@ func (r *FSRepo) IsObjectExists(hash string) bool {
 func (r *FSRepo) insertObject(hash string, src FsFile) error {
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.Move(src.Name(), target)
+}
+
+// scan pack indexes
+func (r *FSRepo) scanPacks() error {
+	if !r.fs.IsFileExist("objects/pack") {
+		println("no packs found")
+		return nil
+	}
+
+	names, err := r.fs.ListDir("objects/pack/")
+	if err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		if strings.HasSuffix(name, ".idx") {
+			// extract hash from pack name
+			println("found pack idx " + name)
+			id := name[18:len(name)-4]
+			packFileName := name[:len(name)-4] + ".pack"
+
+			idxFile, err := r.fs.Open(name)
+			if err != nil {
+				return err
+			}
+
+			packFile, err := r.fs.Open(packFileName)
+			if err != nil {
+				return err
+			}
+
+			pack, err := OpenPack(idxFile, packFile)
+			if err != nil {
+				return err
+			}
+			println("found those objects in index:")
+			for name := range pack.idx.offsets {
+				println(name)
+			}
+			r.packs[id] = pack
+		}
+	}
+	return nil
 }
 
 type objectReader struct {

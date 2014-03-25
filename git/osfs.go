@@ -66,7 +66,7 @@ func (o OsFs) ListDir(path string) ([]string, error) {
 }
 
 func (o OsFs) IsFileExist(path string) bool {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(o.root, path)); os.IsNotExist(err) {
 		return false
 	} else {
 		return true
