@@ -5,12 +5,19 @@ import (
 	"io"
 )
 
+// mirrored from git/cache.h
 const (
-	TYPE_BLOB = iota
-	TYPE_TREE
+	TYPE_BAD = -1
+	TYPE_NONE = iota
 	TYPE_COMMIT
+	TYPE_TREE
+	TYPE_BLOB
 	TYPE_TAG
-	TYPE_UNKNOWN
+	TYPE_unset
+	TYPE_OFS_DELTA
+	TYPE_REF_DELTA
+	TYPE_ANY
+	TYPE_MAX
 )
 
 var (
