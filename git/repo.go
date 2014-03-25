@@ -13,11 +13,6 @@ const (
 	TYPE_UNKNOWN
 )
 
-const (
-	KIND_BRANCH = iota
-	KIND_TAG
-)
-
 var (
 	ERR_INVALID_REF        = errors.New("invalid reference")
 	ERR_NOT_A_SYMBOLIC_REF = errors.New("not a symbolic reference")
