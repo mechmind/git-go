@@ -15,6 +15,7 @@ var ErrInvalidPackVersion = errors.New("invalid pack version")
 var ErrInvalidPackLength = errors.New("invalid pack length")
 var ErrInvalidPackFileHeader = errors.New("invalid pack file header")
 var ErrOffsetIdOutOfRange = errors.New("extended offset id is out of range")
+var ErrInvalidDeltaBaseSize = errors.New("invalid base object size in delta")
 
 type ReadSeekCloser interface {
 	io.Reader
@@ -160,6 +161,15 @@ func (i *IDXFile) LookupObject(hash string) int64 {
 		return -1
 	}
 	return offset
+}
+
+func (i *IDXFile) LookupHash(offset int64) string {
+	for hash, hashOffset := range i.offsets {
+		if offset == hashOffset {
+			return hash
+		}
+	}
+	return ""
 }
 
 func ReadIDXFile(src io.Reader) (*IDXFile, error) {
@@ -343,19 +353,106 @@ func (p *Pack) HasObject(hash string) bool {
 
 func (p *Pack) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 	offset := p.idx.LookupObject(hash)
+	if offset == -1 {
+		return ObjectInfo{}, nil, ErrObjectNotFound
+	}
 
+	return p.openObject(hash, offset)
+}
+
+func (p *Pack) OpenObjectAt(offset int64) (ObjectInfo, io.ReadCloser, error) {
+	hash := p.idx.LookupHash(offset)
+	if hash == "" {
+		return ObjectInfo{}, nil, ErrObjectNotFound
+	}
+
+	return p.openObject(hash, offset)
+}
+
+func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser, error) {
 	info, data, err := p.pack.OpenObjectAt(offset)
 	if err != nil {
 		return ObjectInfo{}, nil, err
 	}
 
 	info.Hash = hash
+	if info.Type == TYPE_REF_DELTA {
+		var hashbuf = make([]byte, 20)
+		_, err = data.Read(hashbuf)
+		if err != nil {
+			return ObjectInfo{}, nil, err
+		}
+
+		srcHash := bytes2hash(hashbuf)
+		srcInfo, src, err := p.OpenObject(srcHash)
+		if err != nil {
+			return ObjectInfo{}, nil, err
+		}
+
+		info.Type = srcInfo.Type
+
+		zlibReader, err := zlib.NewReader(data)
+		if err != nil {
+			return ObjectInfo{}, nil, err
+		}
+
+		return applyDelta(src, zlibReader, info)
+
+	} else if info.Type == TYPE_OFS_DELTA {
+		baseOffset, err := readVarInt(data)
+		if err != nil {
+			return ObjectInfo{}, nil, err
+		}
+
+		baseAddr := offset - baseOffset
+		srcInfo, src, err := p.OpenObjectAt(baseAddr)
+		if err != nil {
+			return ObjectInfo{}, nil, err
+		}
+
+		info.Type = srcInfo.Type
+
+		zlibReader, err := zlib.NewReader(data)
+		if err != nil {
+			return ObjectInfo{}, nil, err
+		}
+		return applyDelta(src, zlibReader, info)
+	}
+
 	zlibReader, err := zlib.NewReader(data)
 	if err != nil {
 		return ObjectInfo{}, nil, err
 	}
 
 	return info, newObjectReader(zlibReader, info.Size), nil
+}
+
+func applyDelta(src, delta io.ReadCloser, info ObjectInfo) (ObjectInfo, io.ReadCloser, error) {
+	_, objSize, applier, err := newDeltaApplier(src, delta, int64(info.Size))
+	if err != nil {
+		return ObjectInfo{}, nil, err
+	}
+	info.Size = objSize
+	return info, newObjectReader(applier, info.Size), nil
+}
+
+func readVarInt(src io.Reader) (int64, error) {
+	var num int64
+	var buf = make([]byte, 1)
+	var shift uint
+
+	for {
+		_, err := src.Read(buf)
+		if err != nil {
+			return 0, err
+		}
+		num += int64(buf[0] & 0x7f) << shift
+		shift += 7
+		if (buf[0] & 0x80) > 0 {
+			break
+		}
+	}
+	return num, nil
 }
 
 func hash2bytes(hash string) []byte {
