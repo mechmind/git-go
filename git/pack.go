@@ -38,12 +38,12 @@ type inMemoryPackFile struct {
 }
 
 func LoadPackFile(src io.Reader) (PackFile, error) {
-	count, err := readPackFileHeader(src)
+	content, err := ioutil.ReadAll(src)
 	if err != nil {
 		return nil, err
 	}
 
-	content, err := ioutil.ReadAll(src)
+	count, err := readPackFileHeader(bytes.NewReader(content))
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,6 @@ func ReadIDXFile(src io.Reader) (*IDXFile, error) {
 }
 
 func readV1IDXFile(src io.Reader) (*IDXFile, error) {
-	println("reading v1 index file")
 	idx := &IDXFile{}
 
 	// skip to last (256) fanout entry
@@ -233,7 +232,6 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 }
 
 func readV2IDXFile(src io.Reader) (*IDXFile, error) {
-	println("reading v2 index file")
 	var idx = &IDXFile{}
 
 	var version int32
@@ -333,7 +331,7 @@ func OpenPack(idxFile, packFile io.ReadCloser) (*Pack, error) {
 	}
 
 	var pack PackFile
-	if seekablePackFile, ok := packFile.(ReadSeekCloser); ok {
+	if seekablePackFile, ok := packFile.(ReadSeekCloser); ok && false{
 		pack, err = OpenPackFile(seekablePackFile)
 		if err != nil {
 			return nil, err
@@ -399,7 +397,7 @@ func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser,
 		return applyDelta(src, zlibReader, info)
 
 	} else if info.Type == TYPE_OFS_DELTA {
-		baseOffset, err := readVarInt(data)
+		baseOffset, err := readOffset(data)
 		if err != nil {
 			return ObjectInfo{}, nil, err
 		}
@@ -448,9 +446,31 @@ func readVarInt(src io.Reader) (int64, error) {
 		}
 		num += int64(buf[0] & 0x7f) << shift
 		shift += 7
-		if (buf[0] & 0x80) > 0 {
+		if (buf[0] & 0x80) == 0 {
 			break
 		}
+	}
+	return num, nil
+}
+
+func readOffset(src io.Reader) (int64, error) {
+	var num int64
+	var buf = make([]byte, 1)
+
+	_, err := src.Read(buf)
+	if err != nil {
+		return 0, err
+	}
+
+	num = int64(buf[0] & 0x7f)
+
+	for buf[0] & 0x80 > 0 {
+		_, err := src.Read(buf)
+		if err != nil {
+			return 0, err
+		}
+		num += 1
+		num = num << 7 + int64(buf[0] & 0x7f)
 	}
 	return num, nil
 }

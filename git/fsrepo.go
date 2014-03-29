@@ -164,7 +164,6 @@ func (r *FSRepo) insertObject(hash string, src FsFile) error {
 // scan pack indexes
 func (r *FSRepo) scanPacks() error {
 	if !r.fs.IsFileExist("objects/pack") {
-		println("no packs found")
 		return nil
 	}
 
@@ -176,7 +175,6 @@ func (r *FSRepo) scanPacks() error {
 	for _, name := range names {
 		if strings.HasSuffix(name, ".idx") {
 			// extract hash from pack name
-			println("found pack idx " + name)
 			id := name[18:len(name)-4]
 			packFileName := name[:len(name)-4] + ".pack"
 
@@ -193,10 +191,6 @@ func (r *FSRepo) scanPacks() error {
 			pack, err := OpenPack(idxFile, packFile)
 			if err != nil {
 				return err
-			}
-			println("found those objects in index:")
-			for name := range pack.idx.offsets {
-				println(name)
 			}
 			r.packs[id] = pack
 		}

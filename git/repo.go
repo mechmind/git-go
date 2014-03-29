@@ -6,8 +6,8 @@ import (
 )
 
 // mirrored from git/cache.h
+const TYPE_BAD = -1
 const (
-	TYPE_BAD = -1
 	TYPE_NONE = iota
 	TYPE_COMMIT
 	TYPE_TREE
