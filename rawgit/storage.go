@@ -12,10 +12,9 @@ type Storage interface {
 
 	ListRefs(ns string) ([]string, error)
 	ReadRef(name string) (string, error)
-	ResolveRef(name string) (*OID, error)
 	ReadSpecialRef(ref SpecialRef) (string, error)
-	UpdateRef(name, value string) error
-	UpdateSpecialRef(ref SpecialRef, value string) error
+	WriteRef(name, value string) error
+	WriteSpecialRef(ref SpecialRef, value string) error
 
 	IsReadOnly() bool
 }

@@ -10,6 +10,10 @@ type OSFS struct {
 	root string
 }
 
+func NewOSFS(root string) OSFS {
+	return OSFS{root}
+}
+
 func (o OSFS) Open(path string) (File, error) {
 	return os.Open(filepath.Join(o.root, path))
 }

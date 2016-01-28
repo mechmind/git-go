@@ -6,6 +6,7 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,19 +16,19 @@ import (
 
 const HeaderBufferSize = 30
 
-type FSRepo struct {
+type FSStorage struct {
 	fs    FS
 	packs map[string]*Pack
 }
 
-func OpenFsRepo(fs FS) (*FSRepo, error) {
-	repo := &FSRepo{fs, make(map[string]*Pack)}
+func OpenFSStorage(fs FS) (*FSStorage, error) {
+	repo := &FSStorage{fs, make(map[string]*Pack)}
 	// load packs
 	err := repo.scanPacks()
 	return repo, err
 }
 
-func (r *FSRepo) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadCloser, error) {
+func (r *FSStorage) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadCloser, error) {
 	hash := oid.String()
 	path := filepath.Join("objects", hash[:2], hash[2:])
 	if !r.fs.IsFileExist(path) {
@@ -61,11 +62,11 @@ func (r *FSRepo) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadCloser, 
 	return objectInfo, newObjectReader(reader, objectInfo.Size), nil
 }
 
-func (r *FSRepo) StatObject(oid *rawgit.OID) (rawgit.ObjectInfo, interface{}, error) {
+func (r *FSStorage) StatObject(oid *rawgit.OID) (rawgit.ObjectInfo, interface{}, error) {
 	return rawgit.ObjectInfo{}, nil, nil
 }
 
-func (r *FSRepo) CreateObject(objType rawgit.OType, size uint64) (rawgit.ObjectWriter, error) {
+func (r *FSStorage) CreateObject(objType rawgit.OType, size uint64) (rawgit.ObjectWriter, error) {
 	if objType <= rawgit.OTypeNone || objType >= rawgit.OTypeUnset {
 		return nil, ErrInvalidObjectType
 	}
@@ -95,68 +96,45 @@ func (r *FSRepo) CreateObject(objType rawgit.OType, size uint64) (rawgit.ObjectW
 	return writer, nil
 }
 
-func (r *FSRepo) ReadRef(ref string) (string, error) {
+func (r *FSStorage) ReadRef(ref string) (string, error) {
 	// read refs till object found
-	for {
-		value, err := readRefFile(r.fs, ref)
-		if err != nil {
-			return "", err
-		}
-
-		if strings.HasPrefix(value, "ref: ") {
-			// symbolic ref, following
-			ref = value[5:]
-		} else {
-			// found hash
-			return value, nil
-		}
-	}
+	return readRefFile(r.fs, path.Join("refs", ref))
 }
 
-func (r *FSRepo) UpdateRef(ref, value string) error {
-	// update existing ref or create one
-	// FIXME: check that value is a hash
-	return writeRefFile(r.fs, ref, value)
+func (r *FSStorage) ReadSpecialRef(ref rawgit.SpecialRef) (string, error) {
+	return readRefFile(r.fs, ref.String())
 }
 
-func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
-	// read symbolic ref. Returns error if ref is not symbolic
-	value, err := readRefFile(r.fs, ref)
-	if err != nil {
-		return "", err
-	}
-
-	if strings.HasPrefix(value, "ref: ") {
-		return value[5:], nil
-	} else {
-		return "", ErrNotASymbolicRef
-	}
+func (r *FSStorage) WriteRef(ref, value string) error {
+	return writeRefFile(r.fs, path.Join("refs", ref), value)
 }
 
-func (r *FSRepo) UpdateSymbolicRef(ref, value string) error {
-	// update symbolic reference or create one
-	// FIXME: check that value is an existing ref?
-	return writeRefFile(r.fs, ref, "ref: "+value)
+func (r *FSStorage) WriteSpecialRef(ref rawgit.SpecialRef, value string) error {
+	return writeRefFile(r.fs, ref.String(), value)
 }
 
-func (r *FSRepo) ListRefs(ns string) ([]string, error) {
+func (r *FSStorage) ListRefs(ns string) ([]string, error) {
 	return r.fs.ListDir(filepath.Join("refs", ns))
 }
 
-func (r *FSRepo) IsObjectExists(oid *rawgit.OID) bool {
+func (r *FSStorage) IsObjectExist(oid *rawgit.OID) bool {
 	hash := oid.String()
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.IsFileExist(target)
 }
 
-func (r *FSRepo) insertObject(oid *rawgit.OID, src File) error {
+func (r *FSStorage) IsReadOnly() bool {
+	return r.fs.IsReadOnly()
+}
+
+func (r *FSStorage) insertObject(oid *rawgit.OID, src File) error {
 	hash := oid.String()
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.Move(src.Name(), target)
 }
 
 // scan pack indexes
-func (r *FSRepo) scanPacks() error {
+func (r *FSStorage) scanPacks() error {
 	if !r.fs.IsFileExist("objects/pack") {
 		return nil
 	}
@@ -207,7 +185,7 @@ func newObjectReader(source io.ReadCloser, size uint64) objectReader {
 }
 
 type objectWriter struct {
-	repo       *FSRepo
+	repo       *FSStorage
 	file       File
 	zlibWriter *zlib.Writer
 	hashWriter hash.Hash
@@ -215,7 +193,7 @@ type objectWriter struct {
 	io.WriteCloser
 }
 
-func newObjectWriter(file File, size uint64, repo *FSRepo) *objectWriter {
+func newObjectWriter(file File, size uint64, repo *FSStorage) *objectWriter {
 	zw := zlib.NewWriter(file)
 	hw := sha1.New()
 	allw := &exactSizeWriter{size, io.MultiWriter(hw, zw)}

@@ -23,7 +23,7 @@ func NewRepository(storage Storage) *Repository {
 }
 
 func (repo *Repository) ResolveBranch(branch string) (*OID, error) {
-	return repo.Storage.ResolveRef("heads/" + branch)
+	return repo.ResolveRef("heads/" + branch)
 }
 
 func (repo *Repository) OpenCommit(oid *OID) (*Commit, error) {
@@ -132,6 +132,21 @@ func (repo *Repository) OpenCursor(commitOID *OID, path string) (*Cursor, error)
 	}
 
 	return cur, nil
+}
+
+func (repo *Repository) ResolveRef(ref string) (*OID, error) {
+	for {
+		value, err := repo.Storage.ReadRef(ref)
+		if err != nil {
+			return nil, err
+		}
+
+		if strings.HasPrefix(value, "ref: ") {
+			ref = value[5:]
+		} else {
+			return ParseOID(value)
+		}
+	}
 }
 
 // TODO: tags
