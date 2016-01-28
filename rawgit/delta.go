@@ -1,9 +1,9 @@
 package rawgit
 
 import (
-	"io"
 	"bytes"
 	"errors"
+	"io"
 	"io/ioutil"
 )
 
@@ -52,42 +52,42 @@ func applyDeltaBuf(src, delta, obj []byte) error {
 		// read delta opcode
 		c = delta[pos]
 		pos++
-		if c & 0x80 > 0 {
+		if c&0x80 > 0 {
 			// this is copy opcode
 			// read offset
 			var offset, size uint32
-			if c & 0x01 > 0 {
+			if c&0x01 > 0 {
 				offset = uint32(delta[pos])
 				pos++
 			}
 
-			if c & 0x02 > 0 {
+			if c&0x02 > 0 {
 				offset += uint32(delta[pos]) << 8
 				pos++
 			}
 
-			if c & 0x04 > 0 {
+			if c&0x04 > 0 {
 				offset += uint32(delta[pos]) << 16
 				pos++
 			}
 
-			if c & 0x08 > 0 {
+			if c&0x08 > 0 {
 				offset += uint32(delta[pos]) << 24
 				pos++
 			}
 
 			// read size
-			if c & 0x10 > 0 {
+			if c&0x10 > 0 {
 				size = uint32(delta[pos])
 				pos++
 			}
 
-			if c & 0x20 > 0 {
+			if c&0x20 > 0 {
 				size += uint32(delta[pos]) << 8
 				pos++
 			}
 
-			if c & 0x40 > 0 {
+			if c&0x40 > 0 {
 				size += uint32(delta[pos]) << 16
 				pos++
 			}

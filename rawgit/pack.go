@@ -32,8 +32,8 @@ type PackFile interface {
 // inMemoryPackFile represents packfile, entirely loaded in memory
 // useful only for read-once packfiles (i.e. from archives)
 type inMemoryPackFile struct {
-	buf []byte
-	count int32
+	buf    []byte
+	count  int32
 	closed bool
 }
 
@@ -76,7 +76,7 @@ func (p *inMemoryPackFile) OpenObjectAt(offs int64) (info ObjectInfo, data io.Re
 
 type seekablePackFile struct {
 	storage ReadSeekCloser
-	count int32
+	count   int32
 }
 
 func OpenPackFile(src ReadSeekCloser) (PackFile, error) {
@@ -139,12 +139,12 @@ func readPackEntryHeader(src io.Reader) (int8, uint64, error) {
 
 	// while there is a 'more' bit, read next byte
 	var shift uint = 4
-	for buf[0] & 0x80 == 0x80 {
+	for buf[0]&0x80 == 0x80 {
 		_, err = src.Read(buf)
 		if err != nil {
 			return 0, 0, err
 		}
-		size += uint64(buf[0] & 0x7f) << shift
+		size += uint64(buf[0]&0x7f) << shift
 		shift += 7
 	}
 
@@ -194,7 +194,7 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 	idx := &IDXFile{}
 
 	// skip to last (256) fanout entry
-	_, err := io.CopyN(ioutil.Discard, src, 254 * 4)
+	_, err := io.CopyN(ioutil.Discard, src, 254*4)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,6 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 		idx.offsets[bytes2hash(hash)] = int64(offset)
 	}
 
-
 	return idx, nil
 }
 
@@ -245,7 +244,7 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 	}
 
 	// skip to last (256) fanout entry
-	_, err = io.CopyN(ioutil.Discard, src, 255 * 4)
+	_, err = io.CopyN(ioutil.Discard, src, 255*4)
 	if err != nil {
 		return nil, err
 	}
@@ -258,14 +257,14 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 	}
 
 	// read all hashes
-	allHashes := make([]byte, int(total) * 20)
+	allHashes := make([]byte, int(total)*20)
 	_, err = src.Read(allHashes)
 	if err != nil {
 		return nil, err
 	}
 
 	// skip all crc32 sums
-	io.CopyN(ioutil.Discard, src, int64(total) * 4)
+	io.CopyN(ioutil.Discard, src, int64(total)*4)
 
 	// read all primary offsets
 	primaryOffsets := make([]int32, int(total))
@@ -284,7 +283,7 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 		return nil, ErrInvalidPackLength
 	}
 
-	extOffsetBuf := trailer[:len(trailer) - 40]
+	extOffsetBuf := trailer[:len(trailer)-40]
 	extOffsetCount := len(extOffsetBuf) / 8
 	var extOffsets []int64
 
@@ -305,7 +304,7 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 		offset4 = primaryOffsets[i]
 		if i < 0 {
 			// it is an extended offset
-			extOffsetId := int(offset & (1 << 31 - 1))
+			extOffsetId := int(offset & (1<<31 - 1))
 			if extOffsetId > len(extOffsets) {
 				return nil, ErrOffsetIdOutOfRange
 			}
@@ -318,10 +317,9 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 	return idx, nil
 }
 
-
 type Pack struct {
 	pack PackFile
-	idx *IDXFile
+	idx  *IDXFile
 }
 
 func OpenPack(idxFile, packFile io.ReadCloser) (*Pack, error) {
@@ -331,7 +329,7 @@ func OpenPack(idxFile, packFile io.ReadCloser) (*Pack, error) {
 	}
 
 	var pack PackFile
-	if seekablePackFile, ok := packFile.(ReadSeekCloser); ok && false{
+	if seekablePackFile, ok := packFile.(ReadSeekCloser); ok && false {
 		pack, err = OpenPackFile(seekablePackFile)
 		if err != nil {
 			return nil, err
@@ -374,7 +372,7 @@ func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser,
 	}
 
 	info.Hash = hash
-	if info.Type == TYPE_REF_DELTA {
+	if info.Type == OTypeRefDelta {
 		var hashbuf = make([]byte, 20)
 		_, err = data.Read(hashbuf)
 		if err != nil {
@@ -396,7 +394,7 @@ func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser,
 
 		return applyDelta(src, zlibReader, info)
 
-	} else if info.Type == TYPE_OFS_DELTA {
+	} else if info.Type == OTypeOffsetDelta {
 		baseOffset, err := readOffset(data)
 		if err != nil {
 			return ObjectInfo{}, nil, err
@@ -444,7 +442,7 @@ func readVarInt(src io.Reader) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		num += int64(buf[0] & 0x7f) << shift
+		num += int64(buf[0]&0x7f) << shift
 		shift += 7
 		if (buf[0] & 0x80) == 0 {
 			break
@@ -464,13 +462,13 @@ func readOffset(src io.Reader) (int64, error) {
 
 	num = int64(buf[0] & 0x7f)
 
-	for buf[0] & 0x80 > 0 {
+	for buf[0]&0x80 > 0 {
 		_, err := src.Read(buf)
 		if err != nil {
 			return 0, err
 		}
 		num += 1
-		num = num << 7 + int64(buf[0] & 0x7f)
+		num = num<<7 + int64(buf[0]&0x7f)
 	}
 	return num, nil
 }

@@ -1,29 +1,61 @@
 package rawgit
 
 import (
-	"errors"
+	"encoding/hex"
 	"io"
 )
 
+type OType int8
+
 // mirrored from git/cache.h
-const TYPE_BAD = -1
+const OTypeBad = -1
 const (
-	TYPE_NONE = iota
-	TYPE_COMMIT
-	TYPE_TREE
-	TYPE_BLOB
-	TYPE_TAG
-	TYPE_unset
-	TYPE_OFS_DELTA
-	TYPE_REF_DELTA
-	TYPE_ANY
-	TYPE_MAX
+	OTypeNone = iota
+	OTypeCommit
+	OTypeTree
+	OTypeBlob
+	OTypeTag
+	OTypeUnset
+	OTypeOffsetDelta
+	OTypeRefDelta
+	OTypeAny
 )
 
-var (
-	ERR_INVALID_REF        = errors.New("invalid reference")
-	ERR_NOT_A_SYMBOLIC_REF = errors.New("not a symbolic reference")
-)
+func (ot OType) String() string {
+	switch ot {
+	case OTypeBad:
+		return "<bad>"
+	case OTypeNone:
+		return "<none>"
+	case OTypeCommit:
+		return "commit"
+	case OTypeBlob:
+		return "blob"
+	case OTypeTag:
+		return "tag"
+	case OTypeUnset:
+		return "<unset>"
+	case OTypeOffsetDelta:
+		return "<offset delta>"
+	case OTypeRefDelta:
+		return "<ref delta>"
+	case OTypeAny:
+		return "<any>"
+	default:
+		return "<invalid>"
+	}
+}
+
+type OID [20]byte
+
+func (oid *OID) String() string {
+	return hex.EncodeToString(oid[:])
+}
+
+type Object interface {
+	OID() OID
+	OType() OType
+}
 
 type ObjectInfo struct {
 	Type int8

@@ -18,7 +18,7 @@ const HEADER_BUFFER = 30
 var ErrObjectNotFound = errors.New("object not found")
 
 type FSRepo struct {
-	fs Fs
+	fs    Fs
 	packs map[string]*Pack
 }
 
@@ -35,7 +35,7 @@ func OpenFsRepo(fs Fs) (Repo, error) {
 
 func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 	path := filepath.Join("objects", hash[:2], hash[2:])
-	if ! r.fs.IsFileExist(path) {
+	if !r.fs.IsFileExist(path) {
 		// lookup object in packs
 		for _, pack := range r.packs {
 			if pack.HasObject(hash) {
@@ -68,13 +68,13 @@ func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
 	var objTypeName string
 	switch objType {
-	case TYPE_BLOB:
+	case OTypeBlob:
 		objTypeName = "blob"
-	case TYPE_COMMIT:
+	case OTypeCommit:
 		objTypeName = "commit"
-	case TYPE_TAG:
+	case OTypeTag:
 		objTypeName = "tag"
-	case TYPE_TREE:
+	case OTypeTree:
 		objTypeName = "tree"
 	default:
 		return nil, errors.New("unknown object type")
@@ -175,7 +175,7 @@ func (r *FSRepo) scanPacks() error {
 	for _, name := range names {
 		if strings.HasSuffix(name, ".idx") {
 			// extract hash from pack name
-			id := name[18:len(name)-4]
+			id := name[18 : len(name)-4]
 			packFileName := name[:len(name)-4] + ".pack"
 
 			idxFile, err := r.fs.Open(name)
@@ -276,13 +276,13 @@ func readHeader(src io.Reader) (ObjectInfo, error) {
 	objType := string(obuf)
 	switch objType {
 	case "blob":
-		objectInfo.Type = TYPE_BLOB
+		objectInfo.Type = OTypeBlob
 	case "commit":
-		objectInfo.Type = TYPE_COMMIT
+		objectInfo.Type = OTypeCommit
 	case "tag":
-		objectInfo.Type = TYPE_TAG
+		objectInfo.Type = OTypeTag
 	case "tree":
-		objectInfo.Type = TYPE_TREE
+		objectInfo.Type = OTypeTree
 	default:
 		return objectInfo, errors.New("unknown object type")
 	}
