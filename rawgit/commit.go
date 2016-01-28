@@ -1,7 +1,6 @@
 package rawgit
 
 import (
-	"errors"
 	"io"
 	"io/ioutil"
 	"strconv"
@@ -11,35 +10,25 @@ import (
 
 const COMMIT_ENTRY_BUFFER = 1024
 
-var (
-	ErrInvalidHashLength = errors.New("invalid hash length")
-	ErrNoTree            = errors.New("no proper 'tree' record in commit object")
-	ErrNoAuthor          = errors.New("no proper 'author' record in commit object")
-	ErrNoCommitter       = errors.New("no proper 'commiter' record in commit object")
-	ErrInvalidEmail      = errors.New("no proper email field in record")
-	ErrInvalidEncoding   = errors.New("malformed encoding record")
-	ErrInvalidRecord     = errors.New("invalid record")
-)
-
 type UserTime struct {
 	Name, Email string
 	Time        time.Time
 }
 
 type Commit struct {
-	TreeId    string
-	ParentIds []string
-	Author    UserTime
-	Committer UserTime
-	Encoding  string
-	Message   string
+	TreeOID    *OID
+	ParentOIDs []*OID
+	Author     UserTime
+	Committer  UserTime
+	Encoding   string
+	Message    string
 }
 
 func ReadCommit(obj io.ReadCloser) (*Commit, error) {
 	var commit = new(Commit)
 
 	var infobuf = make([]byte, COMMIT_ENTRY_BUFFER)
-	var name, hash string
+	var name string
 
 	defer obj.Close()
 
@@ -58,11 +47,11 @@ func ReadCommit(obj io.ReadCloser) (*Commit, error) {
 		return nil, err
 	}
 
-	hash = string(buf)
-	if len(hash) != 40 {
-		return nil, ErrInvalidHashLength
+	oid, err := ParseOID(string(buf))
+	if err != nil {
+		return nil, err
 	}
-	commit.TreeId = hash
+	commit.TreeOID = oid
 
 	// read parents, if any
 	for {
@@ -80,12 +69,15 @@ func ReadCommit(obj io.ReadCloser) (*Commit, error) {
 		if err != nil {
 			return nil, err
 		}
-		hash = string(buf)
-		if len(hash) != 40 {
-			return nil, ErrInvalidHashLength
+
+		oid, err := ParseOID(string(buf))
+		if err != nil {
+			return nil, err
 		}
-		commit.ParentIds = append(commit.ParentIds, hash)
+
+		commit.ParentOIDs = append(commit.ParentOIDs, oid)
 	}
+
 	// read author record
 	// 'name' already read
 	if name != "author" {

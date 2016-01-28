@@ -4,19 +4,11 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 )
 
 const PACK_V2_MAGIC = -9154717 // decoded int value of '\377t0c'
-var ErrInvalidPackVersion = errors.New("invalid pack version")
-var ErrInvalidPackLength = errors.New("invalid pack length")
-var ErrInvalidPackFileHeader = errors.New("invalid pack file header")
-var ErrOffsetIdOutOfRange = errors.New("extended offset id is out of range")
-var ErrInvalidDeltaBaseSize = errors.New("invalid base object size in delta")
-
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
@@ -54,7 +46,7 @@ func LoadPackFile(src io.Reader) (PackFile, error) {
 
 func (p *inMemoryPackFile) Close() error {
 	if p.closed {
-		return errors.New("already closed")
+		return ErrAlreadyClosed
 	}
 
 	p.buf = nil
@@ -69,7 +61,7 @@ func (p *inMemoryPackFile) OpenObjectAt(offs int64) (info ObjectInfo, data io.Re
 		return
 	}
 
-	info.Type = objType
+	info.OType = objType
 	info.Size = objSize
 	return info, reader, nil
 }
@@ -99,7 +91,7 @@ func (p *seekablePackFile) OpenObjectAt(offs int64) (info ObjectInfo, data io.Re
 		return
 	}
 
-	return ObjectInfo{Type: objType, Size: objSize}, p.storage, nil
+	return ObjectInfo{OType: objType, Size: objSize}, p.storage, nil
 }
 
 func readPackFileHeader(src io.Reader) (int32, error) {
@@ -126,7 +118,7 @@ func readPackFileHeader(src io.Reader) (int32, error) {
 	return count, err
 }
 
-func readPackEntryHeader(src io.Reader) (int8, uint64, error) {
+func readPackEntryHeader(src io.Reader) (OType, uint64, error) {
 	var buf = make([]byte, 1)
 	// read first byte, with 3bit type
 	_, err := src.Read(buf)
@@ -134,7 +126,7 @@ func readPackEntryHeader(src io.Reader) (int8, uint64, error) {
 		return 0, 0, err
 	}
 
-	var objType int8 = int8((buf[0] >> 4) & 0x7)
+	var objType OType = OType((buf[0] >> 4) & 0x7)
 	var size uint64 = uint64(buf[0] & 0xf)
 
 	// while there is a 'more' bit, read next byte
@@ -152,24 +144,24 @@ func readPackEntryHeader(src io.Reader) (int8, uint64, error) {
 }
 
 type IDXFile struct {
-	offsets map[string]int64
+	offsets map[OID]int64
 }
 
-func (i *IDXFile) LookupObject(hash string) int64 {
-	offset, ok := i.offsets[hash]
+func (i *IDXFile) LookupObject(oid *OID) int64 {
+	offset, ok := i.offsets[*oid]
 	if !ok {
 		return -1
 	}
 	return offset
 }
 
-func (i *IDXFile) LookupHash(offset int64) string {
-	for hash, hashOffset := range i.offsets {
-		if offset == hashOffset {
-			return hash
+func (i *IDXFile) LookupOID(offset int64) *OID {
+	for oid, oidOffset := range i.offsets {
+		if offset == oidOffset {
+			return &oid
 		}
 	}
-	return ""
+	return nil
 }
 
 func ReadIDXFile(src io.Reader) (*IDXFile, error) {
@@ -206,10 +198,10 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 		return nil, err
 	}
 
-	idx.offsets = make(map[string]int64, total)
+	idx.offsets = make(map[OID]int64, total)
 
 	var offset int32
-	var hash = make([]byte, 20)
+	var oid = [20]byte{}
 
 	var i int32
 	for i = 0; i < total; i++ {
@@ -220,11 +212,11 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 			return nil, err
 		}
 
-		_, err = src.Read(hash)
+		_, err = src.Read(oid[:])
 		if err != nil {
 			return nil, err
 		}
-		idx.offsets[bytes2hash(hash)] = int64(offset)
+		idx.offsets[oid] = int64(offset)
 	}
 
 	return idx, nil
@@ -295,7 +287,7 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 		}
 	}
 
-	idx.offsets = make(map[string]int64, total)
+	idx.offsets = make(map[OID]int64, total)
 
 	// load ids and offsets
 	var i, offset4 int32
@@ -312,7 +304,9 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 		} else {
 			offset = int64(offset4)
 		}
-		idx.offsets[bytes2hash(allHashes[i*20:(i+1)*20])] = offset
+		oid := [20]byte{}
+		copy(oid[:], allHashes[i*20:(i+1)*20])
+		idx.offsets[oid] = offset
 	}
 	return idx, nil
 }
@@ -343,49 +337,50 @@ func OpenPack(idxFile, packFile io.ReadCloser) (*Pack, error) {
 	return &Pack{pack, idx}, nil
 }
 
-func (p *Pack) HasObject(hash string) bool {
-	return p.idx.LookupObject(hash) != -1
+func (p *Pack) HasObject(oid *OID) bool {
+	return p.idx.LookupObject(oid) != -1
 }
 
-func (p *Pack) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
-	offset := p.idx.LookupObject(hash)
+func (p *Pack) OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error) {
+	offset := p.idx.LookupObject(oid)
 	if offset == -1 {
 		return ObjectInfo{}, nil, ErrObjectNotFound
 	}
 
-	return p.openObject(hash, offset)
+	return p.openObject(oid, offset)
 }
 
 func (p *Pack) OpenObjectAt(offset int64) (ObjectInfo, io.ReadCloser, error) {
-	hash := p.idx.LookupHash(offset)
-	if hash == "" {
+	oid := p.idx.LookupOID(offset)
+	if oid == nil {
 		return ObjectInfo{}, nil, ErrObjectNotFound
 	}
 
-	return p.openObject(hash, offset)
+	return p.openObject(oid, offset)
 }
 
-func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser, error) {
+func (p *Pack) openObject(oid *OID, offset int64) (ObjectInfo, io.ReadCloser, error) {
 	info, data, err := p.pack.OpenObjectAt(offset)
 	if err != nil {
 		return ObjectInfo{}, nil, err
 	}
 
-	info.Hash = hash
-	if info.Type == OTypeRefDelta {
+	info.OID = *oid
+	if info.OType == OTypeRefDelta {
 		var hashbuf = make([]byte, 20)
 		_, err = data.Read(hashbuf)
 		if err != nil {
 			return ObjectInfo{}, nil, err
 		}
 
-		srcHash := bytes2hash(hashbuf)
-		srcInfo, src, err := p.OpenObject(srcHash)
+		srcOID := OID{}
+		copy(srcOID[:], hashbuf)
+		srcInfo, src, err := p.OpenObject(&srcOID)
 		if err != nil {
 			return ObjectInfo{}, nil, err
 		}
 
-		info.Type = srcInfo.Type
+		info.OType = srcInfo.OType
 
 		zlibReader, err := zlib.NewReader(data)
 		if err != nil {
@@ -394,7 +389,7 @@ func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser,
 
 		return applyDelta(src, zlibReader, info)
 
-	} else if info.Type == OTypeOffsetDelta {
+	} else if info.OType == OTypeOffsetDelta {
 		baseOffset, err := readOffset(data)
 		if err != nil {
 			return ObjectInfo{}, nil, err
@@ -406,7 +401,7 @@ func (p *Pack) openObject(hash string, offset int64) (ObjectInfo, io.ReadCloser,
 			return ObjectInfo{}, nil, err
 		}
 
-		info.Type = srcInfo.Type
+		info.OType = srcInfo.OType
 
 		zlibReader, err := zlib.NewReader(data)
 		if err != nil {
@@ -471,17 +466,4 @@ func readOffset(src io.Reader) (int64, error) {
 		num = num<<7 + int64(buf[0]&0x7f)
 	}
 	return num, nil
-}
-
-func hash2bytes(hash string) []byte {
-	buf := make([]byte, 20)
-	_, err := fmt.Sscanf(hash, "%x", &buf)
-	if err != nil {
-		return nil
-	}
-	return buf
-}
-
-func bytes2hash(bytes []byte) string {
-	return fmt.Sprintf("%x", bytes)
 }

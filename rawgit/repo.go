@@ -46,20 +46,41 @@ func (ot OType) String() string {
 	}
 }
 
+// for embedding
+func (ot OType) GetOType() OType {
+	return ot
+}
+
 type OID [20]byte
 
 func (oid *OID) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
-type Object interface {
-	OID() OID
-	OType() OType
+// for embedding
+func (oid *OID) GetOID() *OID {
+	return oid
+}
+
+func ParseOID(src string) (*OID, error) {
+	if len(src) != 40 {
+		return nil, ErrInvalidHashLength
+	}
+
+	buf, err := hex.DecodeString(src)
+	if err != nil {
+		return nil, err
+	}
+
+	oid := OID{}
+	copy(oid[:], buf)
+
+	return &oid, nil
 }
 
 type ObjectInfo struct {
-	Type int8
-	Hash string
+	OID
+	OType
 	Size uint64
 }
 
@@ -69,9 +90,10 @@ type ObjectInfo struct {
 // * history lookup?
 type Repo interface {
 	// raw object operations
-	OpenObject(hash string) (ObjectInfo, io.ReadCloser, error)
-	CreateObject(objType int8, size uint64) (ObjectWriter, error)
-	IsObjectExists(hash string) bool
+	OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error)
+	StatObject(oid *OID) (ObjectInfo, interface{}, error)
+	CreateObject(objType OType, size uint64) (ObjectWriter, error)
+	IsObjectExists(oid *OID) bool
 
 	// ref operations
 	ReadRef(name string) (string, error)
@@ -87,5 +109,5 @@ type Repo interface {
 
 type ObjectWriter interface {
 	io.WriteCloser
-	Id() string
+	OID() *OID
 }

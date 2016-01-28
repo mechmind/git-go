@@ -1,13 +1,7 @@
 package rawgit
 
 import (
-	"errors"
 	"io"
-)
-
-var (
-	ErrObjectOverflow    = errors.New("object size overflow")
-	ErrIncompletedObject = errors.New("object was not fully written")
 )
 
 type exactSizeWriter struct {

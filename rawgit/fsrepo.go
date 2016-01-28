@@ -3,8 +3,6 @@ package rawgit
 import (
 	"compress/zlib"
 	"crypto/sha1"
-	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -14,8 +12,6 @@ import (
 )
 
 const HEADER_BUFFER = 30
-
-var ErrObjectNotFound = errors.New("object not found")
 
 type FSRepo struct {
 	fs    Fs
@@ -33,17 +29,19 @@ func OpenFsRepo(fs Fs) (Repo, error) {
 	return repo, err
 }
 
-func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
+func (r *FSRepo) OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error) {
+	hash := oid.String()
 	path := filepath.Join("objects", hash[:2], hash[2:])
 	if !r.fs.IsFileExist(path) {
 		// lookup object in packs
 		for _, pack := range r.packs {
-			if pack.HasObject(hash) {
-				return pack.OpenObject(hash)
+			if pack.HasObject(oid) {
+				return pack.OpenObject(oid)
 			}
 		}
 		return ObjectInfo{}, nil, ErrObjectNotFound
 	}
+
 	file, err := r.fs.Open(path)
 	if err != nil {
 		return ObjectInfo{}, nil, err
@@ -60,25 +58,20 @@ func (r *FSRepo) OpenObject(hash string) (ObjectInfo, io.ReadCloser, error) {
 		return ObjectInfo{}, nil, err
 	}
 
-	objectInfo.Hash = hash
+	objectInfo.OID = *oid
 
 	return objectInfo, newObjectReader(reader, objectInfo.Size), nil
 }
 
-func (r *FSRepo) CreateObject(objType int8, size uint64) (ObjectWriter, error) {
-	var objTypeName string
-	switch objType {
-	case OTypeBlob:
-		objTypeName = "blob"
-	case OTypeCommit:
-		objTypeName = "commit"
-	case OTypeTag:
-		objTypeName = "tag"
-	case OTypeTree:
-		objTypeName = "tree"
-	default:
-		return nil, errors.New("unknown object type")
+func (r *FSRepo) StatObject(oid *OID) (ObjectInfo, interface{}, error) {
+	return ObjectInfo{}, nil, nil
+}
+
+func (r *FSRepo) CreateObject(objType OType, size uint64) (ObjectWriter, error) {
+	if objType <= OTypeNone || objType >= OTypeUnset {
+		return nil, ErrInvalidObjectType
 	}
+	var objTypeName = objType.String()
 
 	// create header
 	header := make([]byte, HEADER_BUFFER)
@@ -152,11 +145,14 @@ func (r *FSRepo) ListRefs(ns string) ([]string, error) {
 	return r.fs.ListDir(filepath.Join("refs", ns))
 }
 
-func (r *FSRepo) IsObjectExists(hash string) bool {
-	return r.fs.IsFileExist(filepath.Join("objects", hash))
+func (r *FSRepo) IsObjectExists(oid *OID) bool {
+	hash := oid.String()
+	target := filepath.Join("objects", hash[:2], hash[2:])
+	return r.fs.IsFileExist(target)
 }
 
-func (r *FSRepo) insertObject(hash string, src FsFile) error {
+func (r *FSRepo) insertObject(oid *OID, src FsFile) error {
+	hash := oid.String()
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.Move(src.Name(), target)
 }
@@ -217,7 +213,7 @@ type objectWriter struct {
 	file       FsFile
 	zlibWriter *zlib.Writer
 	hashWriter hash.Hash
-	id         string
+	id         *OID
 	io.WriteCloser
 }
 
@@ -225,7 +221,7 @@ func newObjectWriter(file FsFile, size uint64, repo *FSRepo) *objectWriter {
 	zw := zlib.NewWriter(file)
 	hw := sha1.New()
 	allw := &exactSizeWriter{size, io.MultiWriter(hw, zw)}
-	return &objectWriter{repo, file, zw, hw, "", allw}
+	return &objectWriter{repo, file, zw, hw, nil, allw}
 }
 
 func (ob *objectWriter) closeWriters() error {
@@ -254,14 +250,16 @@ func (ob *objectWriter) Close() error {
 		return err
 	}
 
-	ob.id = fmt.Sprintf("%x", ob.hashWriter.Sum(nil))
+	oid := OID{}
+	copy(oid[:], ob.hashWriter.Sum(nil))
+	ob.id = &oid
 
 	// insert object into repo storage
 	return ob.repo.insertObject(ob.id, ob.file)
 }
 
-func (ob *objectWriter) Id() string {
-	return ob.id
+func (ob *objectWriter) OID() *OID {
+	return ob.id.GetOID()
 }
 
 func readHeader(src io.Reader) (ObjectInfo, error) {
@@ -273,18 +271,19 @@ func readHeader(src io.Reader) (ObjectInfo, error) {
 	if err != nil {
 		return objectInfo, err
 	}
+
 	objType := string(obuf)
 	switch objType {
 	case "blob":
-		objectInfo.Type = OTypeBlob
+		objectInfo.OType = OTypeBlob
 	case "commit":
-		objectInfo.Type = OTypeCommit
+		objectInfo.OType = OTypeCommit
 	case "tag":
-		objectInfo.Type = OTypeTag
+		objectInfo.OType = OTypeTag
 	case "tree":
-		objectInfo.Type = OTypeTree
+		objectInfo.OType = OTypeTree
 	default:
-		return objectInfo, errors.New("unknown object type")
+		return objectInfo, ErrInvalidObjectType
 	}
 
 	// read length of object
@@ -313,7 +312,7 @@ func scanUntil(src io.Reader, needle byte, buf []byte) ([]byte, error) {
 			return buf[:i], nil
 		}
 	}
-	return nil, errors.New("buffer depleted")
+	return nil, ErrBufferDepleted
 }
 
 func readRefFile(fs Fs, path string) (string, error) {

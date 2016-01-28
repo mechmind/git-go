@@ -2,13 +2,8 @@ package rawgit
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
-)
-
-var (
-	ErrInvalidDeltaOpcode = errors.New("invalid delta opcode")
 )
 
 // Read delta headers and return Reader of target object.
