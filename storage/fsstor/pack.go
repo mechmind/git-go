@@ -1,4 +1,4 @@
-package rawgit
+package fsstor
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"io"
 	"io/ioutil"
+
+	"github.com/mechmind/git-go/rawgit"
 )
 
 const PackV2Magic = -9154717 // decoded int value of '\377t0c'
@@ -18,7 +20,7 @@ type ReadSeekCloser interface {
 // packfile reader
 type PackFile interface {
 	Close() error
-	OpenObjectAt(offset int64) (objInfo ObjectInfo, src io.Reader, err error)
+	OpenObjectAt(offset int64) (objInfo rawgit.ObjectInfo, src io.Reader, err error)
 }
 
 // inMemoryPackFile represents packfile, entirely loaded in memory
@@ -54,7 +56,7 @@ func (p *inMemoryPackFile) Close() error {
 	return nil
 }
 
-func (p *inMemoryPackFile) OpenObjectAt(offs int64) (info ObjectInfo, data io.Reader, err error) {
+func (p *inMemoryPackFile) OpenObjectAt(offs int64) (info rawgit.ObjectInfo, data io.Reader, err error) {
 	reader := bytes.NewReader(p.buf[int(offs):])
 	objType, objSize, err := readPackEntryHeader(reader)
 	if err != nil {
@@ -84,14 +86,14 @@ func (p *seekablePackFile) Close() error {
 	return p.storage.Close()
 }
 
-func (p *seekablePackFile) OpenObjectAt(offs int64) (info ObjectInfo, data io.Reader, err error) {
+func (p *seekablePackFile) OpenObjectAt(offs int64) (info rawgit.ObjectInfo, data io.Reader, err error) {
 	_, err = p.storage.Seek(offs, 0)
 	objType, objSize, err := readPackEntryHeader(p.storage)
 	if err != nil {
 		return
 	}
 
-	return ObjectInfo{OType: objType, Size: objSize}, p.storage, nil
+	return rawgit.ObjectInfo{OType: objType, Size: objSize}, p.storage, nil
 }
 
 func readPackFileHeader(src io.Reader) (int32, error) {
@@ -118,7 +120,7 @@ func readPackFileHeader(src io.Reader) (int32, error) {
 	return count, err
 }
 
-func readPackEntryHeader(src io.Reader) (OType, uint64, error) {
+func readPackEntryHeader(src io.Reader) (rawgit.OType, uint64, error) {
 	var buf = make([]byte, 1)
 	// read first byte, with 3bit type
 	_, err := src.Read(buf)
@@ -126,7 +128,7 @@ func readPackEntryHeader(src io.Reader) (OType, uint64, error) {
 		return 0, 0, err
 	}
 
-	var objType OType = OType((buf[0] >> 4) & 0x7)
+	var objType rawgit.OType = rawgit.OType((buf[0] >> 4) & 0x7)
 	var size uint64 = uint64(buf[0] & 0xf)
 
 	// while there is a 'more' bit, read next byte
@@ -144,10 +146,10 @@ func readPackEntryHeader(src io.Reader) (OType, uint64, error) {
 }
 
 type IDXFile struct {
-	offsets map[OID]int64
+	offsets map[rawgit.OID]int64
 }
 
-func (i *IDXFile) LookupObject(oid *OID) int64 {
+func (i *IDXFile) LookupObject(oid *rawgit.OID) int64 {
 	offset, ok := i.offsets[*oid]
 	if !ok {
 		return -1
@@ -155,7 +157,7 @@ func (i *IDXFile) LookupObject(oid *OID) int64 {
 	return offset
 }
 
-func (i *IDXFile) LookupOID(offset int64) *OID {
+func (i *IDXFile) LookupOID(offset int64) *rawgit.OID {
 	for oid, oidOffset := range i.offsets {
 		if offset == oidOffset {
 			return &oid
@@ -198,7 +200,7 @@ func readV1IDXFile(src io.Reader) (*IDXFile, error) {
 		return nil, err
 	}
 
-	idx.offsets = make(map[OID]int64, total)
+	idx.offsets = make(map[rawgit.OID]int64, total)
 
 	var offset int32
 	var oid = [20]byte{}
@@ -287,7 +289,7 @@ func readV2IDXFile(src io.Reader) (*IDXFile, error) {
 		}
 	}
 
-	idx.offsets = make(map[OID]int64, total)
+	idx.offsets = make(map[rawgit.OID]int64, total)
 
 	// load ids and offsets
 	var i, offset4 int32
@@ -337,91 +339,91 @@ func OpenPack(idxFile, packFile io.ReadCloser) (*Pack, error) {
 	return &Pack{pack, idx}, nil
 }
 
-func (p *Pack) HasObject(oid *OID) bool {
+func (p *Pack) HasObject(oid *rawgit.OID) bool {
 	return p.idx.LookupObject(oid) != -1
 }
 
-func (p *Pack) OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error) {
+func (p *Pack) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadCloser, error) {
 	offset := p.idx.LookupObject(oid)
 	if offset == -1 {
-		return ObjectInfo{}, nil, ErrObjectNotFound
+		return rawgit.ObjectInfo{}, nil, ErrObjectNotFound
 	}
 
 	return p.openObject(oid, offset)
 }
 
-func (p *Pack) OpenObjectAt(offset int64) (ObjectInfo, io.ReadCloser, error) {
+func (p *Pack) OpenObjectAt(offset int64) (rawgit.ObjectInfo, io.ReadCloser, error) {
 	oid := p.idx.LookupOID(offset)
 	if oid == nil {
-		return ObjectInfo{}, nil, ErrObjectNotFound
+		return rawgit.ObjectInfo{}, nil, ErrObjectNotFound
 	}
 
 	return p.openObject(oid, offset)
 }
 
-func (p *Pack) openObject(oid *OID, offset int64) (ObjectInfo, io.ReadCloser, error) {
+func (p *Pack) openObject(oid *rawgit.OID, offset int64) (rawgit.ObjectInfo, io.ReadCloser, error) {
 	info, data, err := p.pack.OpenObjectAt(offset)
 	if err != nil {
-		return ObjectInfo{}, nil, err
+		return rawgit.ObjectInfo{}, nil, err
 	}
 
 	info.OID = *oid
-	if info.OType == OTypeRefDelta {
+	if info.OType == rawgit.OTypeRefDelta {
 		var hashbuf = make([]byte, 20)
 		_, err = data.Read(hashbuf)
 		if err != nil {
-			return ObjectInfo{}, nil, err
+			return rawgit.ObjectInfo{}, nil, err
 		}
 
-		srcOID := OID{}
+		srcOID := rawgit.OID{}
 		copy(srcOID[:], hashbuf)
 		srcInfo, src, err := p.OpenObject(&srcOID)
 		if err != nil {
-			return ObjectInfo{}, nil, err
+			return rawgit.ObjectInfo{}, nil, err
 		}
 
 		info.OType = srcInfo.OType
 
 		zlibReader, err := zlib.NewReader(data)
 		if err != nil {
-			return ObjectInfo{}, nil, err
+			return rawgit.ObjectInfo{}, nil, err
 		}
 
 		return applyDelta(src, zlibReader, info)
 
-	} else if info.OType == OTypeOffsetDelta {
+	} else if info.OType == rawgit.OTypeOffsetDelta {
 		baseOffset, err := readOffset(data)
 		if err != nil {
-			return ObjectInfo{}, nil, err
+			return rawgit.ObjectInfo{}, nil, err
 		}
 
 		baseAddr := offset - baseOffset
 		srcInfo, src, err := p.OpenObjectAt(baseAddr)
 		if err != nil {
-			return ObjectInfo{}, nil, err
+			return rawgit.ObjectInfo{}, nil, err
 		}
 
 		info.OType = srcInfo.OType
 
 		zlibReader, err := zlib.NewReader(data)
 		if err != nil {
-			return ObjectInfo{}, nil, err
+			return rawgit.ObjectInfo{}, nil, err
 		}
 		return applyDelta(src, zlibReader, info)
 	}
 
 	zlibReader, err := zlib.NewReader(data)
 	if err != nil {
-		return ObjectInfo{}, nil, err
+		return rawgit.ObjectInfo{}, nil, err
 	}
 
 	return info, newObjectReader(zlibReader, info.Size), nil
 }
 
-func applyDelta(src, delta io.ReadCloser, info ObjectInfo) (ObjectInfo, io.ReadCloser, error) {
+func applyDelta(src, delta io.ReadCloser, info rawgit.ObjectInfo) (rawgit.ObjectInfo, io.ReadCloser, error) {
 	_, objSize, applier, err := newDeltaApplier(src, delta, int64(info.Size))
 	if err != nil {
-		return ObjectInfo{}, nil, err
+		return rawgit.ObjectInfo{}, nil, err
 	}
 	info.Size = objSize
 	return info, newObjectReader(applier, info.Size), nil

@@ -1,4 +1,4 @@
-package rawgit
+package fsstor
 
 import (
 	"bytes"

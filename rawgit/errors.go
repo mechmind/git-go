@@ -41,17 +41,7 @@ var (
 	ErrInvalidRecord     = errors.New("invalid record")
 )
 
-var (
-	ErrInvalidDeltaOpcode = errors.New("invalid delta opcode")
-)
-
 var ErrObjectNotFound = errors.New("object not found")
-
-var ErrInvalidPackVersion = errors.New("invalid pack version")
-var ErrInvalidPackLength = errors.New("invalid pack length")
-var ErrInvalidPackFileHeader = errors.New("invalid pack file header")
-var ErrOffsetIdOutOfRange = errors.New("extended offset id is out of range")
-var ErrInvalidDeltaBaseSize = errors.New("invalid base object size in delta")
 
 var ErrInvalidObjectType = errors.New("invalid object type")
 

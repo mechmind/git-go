@@ -1,4 +1,4 @@
-package rawgit
+package fsstor
 
 import (
 	"compress/zlib"
@@ -9,27 +9,25 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/mechmind/git-go/rawgit"
 )
 
 const HeaderBufferSize = 30
 
 type FSRepo struct {
-	fs    Fs
+	fs    FS
 	packs map[string]*Pack
 }
 
-func OpenRepo(gitDir string) (Repo, error) {
-	return OpenFsRepo(&OsFs{gitDir})
-}
-
-func OpenFsRepo(fs Fs) (Repo, error) {
+func OpenFsRepo(fs FS) (*FSRepo, error) {
 	repo := &FSRepo{fs, make(map[string]*Pack)}
 	// load packs
 	err := repo.scanPacks()
 	return repo, err
 }
 
-func (r *FSRepo) OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error) {
+func (r *FSRepo) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadCloser, error) {
 	hash := oid.String()
 	path := filepath.Join("objects", hash[:2], hash[2:])
 	if !r.fs.IsFileExist(path) {
@@ -39,23 +37,23 @@ func (r *FSRepo) OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error) {
 				return pack.OpenObject(oid)
 			}
 		}
-		return ObjectInfo{}, nil, ErrObjectNotFound
+		return rawgit.ObjectInfo{}, nil, ErrObjectNotFound
 	}
 
 	file, err := r.fs.Open(path)
 	if err != nil {
-		return ObjectInfo{}, nil, err
+		return rawgit.ObjectInfo{}, nil, err
 	}
 
 	reader, err := zlib.NewReader(file)
 	if err != nil {
-		return ObjectInfo{}, nil, err
+		return rawgit.ObjectInfo{}, nil, err
 	}
 
 	objectInfo, err := readHeader(reader)
 	if err != nil {
 		reader.Close()
-		return ObjectInfo{}, nil, err
+		return rawgit.ObjectInfo{}, nil, err
 	}
 
 	objectInfo.OID = *oid
@@ -63,12 +61,12 @@ func (r *FSRepo) OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error) {
 	return objectInfo, newObjectReader(reader, objectInfo.Size), nil
 }
 
-func (r *FSRepo) StatObject(oid *OID) (ObjectInfo, interface{}, error) {
-	return ObjectInfo{}, nil, nil
+func (r *FSRepo) StatObject(oid *rawgit.OID) (rawgit.ObjectInfo, interface{}, error) {
+	return rawgit.ObjectInfo{}, nil, nil
 }
 
-func (r *FSRepo) CreateObject(objType OType, size uint64) (ObjectWriter, error) {
-	if objType <= OTypeNone || objType >= OTypeUnset {
+func (r *FSRepo) CreateObject(objType rawgit.OType, size uint64) (rawgit.ObjectWriter, error) {
+	if objType <= rawgit.OTypeNone || objType >= rawgit.OTypeUnset {
 		return nil, ErrInvalidObjectType
 	}
 	var objTypeName = objType.String()
@@ -145,13 +143,13 @@ func (r *FSRepo) ListRefs(ns string) ([]string, error) {
 	return r.fs.ListDir(filepath.Join("refs", ns))
 }
 
-func (r *FSRepo) IsObjectExists(oid *OID) bool {
+func (r *FSRepo) IsObjectExists(oid *rawgit.OID) bool {
 	hash := oid.String()
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.IsFileExist(target)
 }
 
-func (r *FSRepo) insertObject(oid *OID, src FsFile) error {
+func (r *FSRepo) insertObject(oid *rawgit.OID, src File) error {
 	hash := oid.String()
 	target := filepath.Join("objects", hash[:2], hash[2:])
 	return r.fs.Move(src.Name(), target)
@@ -210,14 +208,14 @@ func newObjectReader(source io.ReadCloser, size uint64) objectReader {
 
 type objectWriter struct {
 	repo       *FSRepo
-	file       FsFile
+	file       File
 	zlibWriter *zlib.Writer
 	hashWriter hash.Hash
-	id         *OID
+	id         *rawgit.OID
 	io.WriteCloser
 }
 
-func newObjectWriter(file FsFile, size uint64, repo *FSRepo) *objectWriter {
+func newObjectWriter(file File, size uint64, repo *FSRepo) *objectWriter {
 	zw := zlib.NewWriter(file)
 	hw := sha1.New()
 	allw := &exactSizeWriter{size, io.MultiWriter(hw, zw)}
@@ -250,7 +248,7 @@ func (ob *objectWriter) Close() error {
 		return err
 	}
 
-	oid := OID{}
+	oid := rawgit.OID{}
 	copy(oid[:], ob.hashWriter.Sum(nil))
 	ob.id = &oid
 
@@ -258,12 +256,12 @@ func (ob *objectWriter) Close() error {
 	return ob.repo.insertObject(ob.id, ob.file)
 }
 
-func (ob *objectWriter) OID() *OID {
+func (ob *objectWriter) GetOID() *rawgit.OID {
 	return ob.id.GetOID()
 }
 
-func readHeader(src io.Reader) (ObjectInfo, error) {
-	var objectInfo ObjectInfo
+func readHeader(src io.Reader) (rawgit.ObjectInfo, error) {
+	var objectInfo rawgit.ObjectInfo
 	var buf = make([]byte, HeaderBufferSize)
 
 	// read type of object
@@ -275,13 +273,13 @@ func readHeader(src io.Reader) (ObjectInfo, error) {
 	objType := string(obuf)
 	switch objType {
 	case "blob":
-		objectInfo.OType = OTypeBlob
+		objectInfo.OType = rawgit.OTypeBlob
 	case "commit":
-		objectInfo.OType = OTypeCommit
+		objectInfo.OType = rawgit.OTypeCommit
 	case "tag":
-		objectInfo.OType = OTypeTag
+		objectInfo.OType = rawgit.OTypeTag
 	case "tree":
-		objectInfo.OType = OTypeTree
+		objectInfo.OType = rawgit.OTypeTree
 	default:
 		return objectInfo, ErrInvalidObjectType
 	}
@@ -289,12 +287,12 @@ func readHeader(src io.Reader) (ObjectInfo, error) {
 	// read length of object
 	obuf, err = scanUntil(src, 0, buf)
 	if err != nil {
-		return ObjectInfo{}, err
+		return rawgit.ObjectInfo{}, err
 	}
 
 	size, err := strconv.ParseUint(string(obuf), 10, 64)
 	if err != nil {
-		return ObjectInfo{}, err
+		return rawgit.ObjectInfo{}, err
 	}
 	objectInfo.Size = size
 	return objectInfo, nil
@@ -315,7 +313,7 @@ func scanUntil(src io.Reader, needle byte, buf []byte) ([]byte, error) {
 	return nil, ErrBufferDepleted
 }
 
-func readRefFile(fs Fs, path string) (string, error) {
+func readRefFile(fs FS, path string) (string, error) {
 	file, err := fs.Open(path)
 	if err != nil {
 		return "", err
@@ -330,7 +328,7 @@ func readRefFile(fs Fs, path string) (string, error) {
 	return value, nil
 }
 
-func writeRefFile(fs Fs, path string, data string) error {
+func writeRefFile(fs FS, path string, data string) error {
 	file, err := fs.Create(path)
 	if err != nil {
 		return err
@@ -340,4 +338,41 @@ func writeRefFile(fs Fs, path string, data string) error {
 	_, err = file.Write([]byte(data))
 
 	return err
+}
+
+type exactSizeWriter struct {
+	bytesLeft uint64
+	writer    io.Writer
+}
+
+func (e *exactSizeWriter) Write(data []byte) (n int, err error) {
+	length := uint64(len(data))
+	if length == 0 {
+		return 0, nil
+	}
+
+	if length > e.bytesLeft {
+		// FIXME: should be instant fail
+		// write remaining chunk and return overflow error
+		println("want to write ", length, " bytes, but left only ", e.bytesLeft)
+		data = data[:int(e.bytesLeft)]
+		n, err := e.writer.Write(data)
+		e.bytesLeft -= uint64(n)
+		if err != nil {
+			return n, err
+		} else {
+			return n, ErrObjectOverflow
+		}
+	} else {
+		n, err := e.writer.Write(data)
+		e.bytesLeft -= uint64(n)
+		return n, err
+	}
+}
+
+func (e *exactSizeWriter) Close() error {
+	if e.bytesLeft != 0 {
+		return ErrIncompletedObject
+	}
+	return nil
 }

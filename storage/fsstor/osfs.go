@@ -1,4 +1,4 @@
-package rawgit
+package fsstor
 
 import (
 	"io/ioutil"
@@ -6,15 +6,15 @@ import (
 	"path/filepath"
 )
 
-type OsFs struct {
+type OSFS struct {
 	root string
 }
 
-func (o OsFs) Open(path string) (FsFile, error) {
+func (o OSFS) Open(path string) (File, error) {
 	return os.Open(filepath.Join(o.root, path))
 }
 
-func (o OsFs) Create(path string) (FsFile, error) {
+func (o OSFS) Create(path string) (File, error) {
 	path = filepath.Join(o.root, path)
 	base := filepath.Dir(path)
 	if _, err := os.Stat(base); os.IsNotExist(err) {
@@ -27,7 +27,7 @@ func (o OsFs) Create(path string) (FsFile, error) {
 	return os.Create(path)
 }
 
-func (o OsFs) TempFile() (FsFile, error) {
+func (o OSFS) TempFile() (File, error) {
 	tmp, err := ioutil.TempFile(o.root, "tmpgitgo.")
 	if err != nil {
 		return nil, err
@@ -36,7 +36,7 @@ func (o OsFs) TempFile() (FsFile, error) {
 	return &tmpFileRemover{tmp}, nil
 }
 
-func (o OsFs) Move(from string, to string) error {
+func (o OSFS) Move(from string, to string) error {
 	dst, err := o.Create(filepath.Join(o.root, to))
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (o OsFs) Move(from string, to string) error {
 	return os.Rename(from, dst.Name())
 }
 
-func (o OsFs) ListDir(path string) ([]string, error) {
+func (o OSFS) ListDir(path string) ([]string, error) {
 	baseDir := filepath.Join(o.root, path)
 	// FIXME: refs with slashes
 	if _, err := os.Stat(baseDir); os.IsNotExist(err) {
@@ -65,12 +65,17 @@ func (o OsFs) ListDir(path string) ([]string, error) {
 	return names, nil
 }
 
-func (o OsFs) IsFileExist(path string) bool {
+func (o OSFS) IsFileExist(path string) bool {
 	if _, err := os.Stat(filepath.Join(o.root, path)); os.IsNotExist(err) {
 		return false
 	} else {
 		return true
 	}
+}
+
+func (o OSFS) IsReadOnly() bool {
+	// TODO: check for write permissions
+	return false
 }
 
 type tmpFileRemover struct {
