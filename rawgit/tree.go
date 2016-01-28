@@ -1,23 +1,44 @@
 package rawgit
 
 import (
-	"fmt"
 	"io"
 	"strconv"
 )
 
 const (
 	TreeEntryBufferSize = 1024
+	TreeDirectoryMode   = 040000
 )
 
 type Tree struct {
 	Items []TreeItem
 }
 
+func (tree *Tree) Find(name string) *TreeItem {
+	for idx := range tree.Items {
+		if tree.Items[idx].Name == name {
+			return &tree.Items[idx]
+		}
+	}
+	return nil
+}
+
 type TreeItem struct {
 	Name string
 	Mode uint32
-	Hash string
+	OID  OID
+}
+
+func (item *TreeItem) GetOType() OType {
+	if item.Mode&TreeDirectoryMode > 0 {
+		return OTypeTree
+	} else {
+		return OTypeBlob
+	}
+}
+
+func (item *TreeItem) GetOID() *OID {
+	return &item.OID
 }
 
 func ReadTree(obj io.ReadCloser) (*Tree, error) {
@@ -61,8 +82,14 @@ func ReadTree(obj io.ReadCloser) (*Tree, error) {
 			return nil, err
 		}
 
-		item.Hash = fmt.Sprintf("%x", hashbuf)
+		oid, err := OIDFromBytes(hashbuf)
+		if err != nil {
+			return nil, err
+		}
+
+		item.OID = *oid
 		tree.Items = append(tree.Items, item)
 	}
+
 	return tree, nil
 }
