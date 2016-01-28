@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const COMMIT_ENTRY_BUFFER = 1024
+const CommitEntryBufferSize = 1024
 
 type UserTime struct {
 	Name, Email string
@@ -27,7 +27,7 @@ type Commit struct {
 func ReadCommit(obj io.ReadCloser) (*Commit, error) {
 	var commit = new(Commit)
 
-	var infobuf = make([]byte, COMMIT_ENTRY_BUFFER)
+	var infobuf = make([]byte, CommitEntryBufferSize)
 	var name string
 
 	defer obj.Close()

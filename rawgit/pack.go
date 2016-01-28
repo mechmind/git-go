@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 )
 
-const PACK_V2_MAGIC = -9154717 // decoded int value of '\377t0c'
+const PackV2Magic = -9154717 // decoded int value of '\377t0c'
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
@@ -173,7 +173,7 @@ func ReadIDXFile(src io.Reader) (*IDXFile, error) {
 		return nil, err
 	}
 
-	if magic == PACK_V2_MAGIC {
+	if magic == PackV2Magic {
 		// this is v2 or greater pack index
 		return readV2IDXFile(src)
 	} else {

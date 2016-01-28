@@ -19,8 +19,7 @@ func (be BoundError) Error() string {
 }
 
 var (
-	ERR_INVALID_REF        = errors.New("invalid reference")
-	ERR_NOT_A_SYMBOLIC_REF = errors.New("not a symbolic reference")
+	ErrNotASymbolicRef = errors.New("not a symbolic reference")
 )
 
 var (

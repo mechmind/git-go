@@ -7,8 +7,7 @@ import (
 )
 
 const (
-	TREE_MODE_DIR     = 040000
-	TREE_ENTRY_BUFFER = 1024
+	TreeEntryBufferSize = 1024
 )
 
 type Tree struct {
@@ -24,7 +23,7 @@ type TreeItem struct {
 func ReadTree(obj io.ReadCloser) (*Tree, error) {
 	var tree = new(Tree)
 	var hashbuf = make([]byte, 20)
-	var infobuf = make([]byte, TREE_ENTRY_BUFFER)
+	var infobuf = make([]byte, TreeEntryBufferSize)
 
 	defer obj.Close()
 

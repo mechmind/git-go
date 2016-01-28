@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const HEADER_BUFFER = 30
+const HeaderBufferSize = 30
 
 type FSRepo struct {
 	fs    Fs
@@ -74,7 +74,7 @@ func (r *FSRepo) CreateObject(objType OType, size uint64) (ObjectWriter, error) 
 	var objTypeName = objType.String()
 
 	// create header
-	header := make([]byte, HEADER_BUFFER)
+	header := make([]byte, HeaderBufferSize)
 	pos := copy(header, []byte(objTypeName))
 	header[pos] = ' '
 	pos++
@@ -131,7 +131,7 @@ func (r *FSRepo) ReadSymbolicRef(ref string) (string, error) {
 	if strings.HasPrefix(value, "ref: ") {
 		return value[5:], nil
 	} else {
-		return "", ERR_NOT_A_SYMBOLIC_REF
+		return "", ErrNotASymbolicRef
 	}
 }
 
@@ -264,7 +264,7 @@ func (ob *objectWriter) OID() *OID {
 
 func readHeader(src io.Reader) (ObjectInfo, error) {
 	var objectInfo ObjectInfo
-	var buf = make([]byte, HEADER_BUFFER)
+	var buf = make([]byte, HeaderBufferSize)
 
 	// read type of object
 	obuf, err := scanUntil(src, ' ', buf)
