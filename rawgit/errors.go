@@ -20,6 +20,10 @@ func (be BoundError) Error() string {
 
 var (
 	ErrNotASymbolicRef = errors.New("not a symbolic reference")
+	ErrNotACommit      = errors.New("not a commit object")
+	ErrNotATree        = errors.New("not a tree object")
+	ErrInvalidPath     = errors.New("invalid path")
+	ErrNotFound        = errors.New("not found")
 )
 
 var (
