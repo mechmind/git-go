@@ -36,7 +36,13 @@ func (repo *Repository) OpenCommit(oid *OID) (*Commit, error) {
 		return nil, ErrNotACommit
 	}
 
-	return ReadCommit(body)
+	commit, err := ReadCommit(body)
+	if err != nil {
+		return nil, err
+	}
+
+	commit.OID = *oid
+	return commit, nil
 }
 
 func (repo *Repository) Parents(commit *Commit) ([]*Commit, error) {

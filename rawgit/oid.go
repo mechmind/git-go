@@ -56,6 +56,10 @@ func (oid *OID) String() string {
 	return hex.EncodeToString(oid[:])
 }
 
+func (oid *OID) Equal(comp *OID) bool {
+	return *oid == *comp
+}
+
 // for embedding
 func (oid *OID) GetOID() *OID {
 	return oid

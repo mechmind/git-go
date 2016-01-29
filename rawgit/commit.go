@@ -16,6 +16,8 @@ type UserTime struct {
 }
 
 type Commit struct {
+	OID
+	OType
 	TreeOID    *OID
 	ParentOIDs []*OID
 	Author     UserTime
@@ -26,6 +28,7 @@ type Commit struct {
 
 func ReadCommit(obj io.ReadCloser) (*Commit, error) {
 	var commit = new(Commit)
+	commit.OType = OTypeCommit
 
 	var infobuf = make([]byte, CommitEntryBufferSize)
 	var name string
