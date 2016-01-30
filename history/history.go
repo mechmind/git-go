@@ -129,9 +129,15 @@ func mergeRoots(base, merging []*rawgit.Commit, eq CommitComparator, seen Commit
 	for _, needle := range merging {
 		found := false
 		for _, item := range base {
+			if needle.GetOID().Equal(item.GetOID()) {
+				// we struck merge base!
+				// drop it
+				found = true
+				break
+			}
 			if eq(needle, item) {
 				// found equal commit in merging roots
-				// drop it
+				// witness and drop it
 				seen.Add(needle.GetOID())
 				found = true
 				break
