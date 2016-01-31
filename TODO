@@ -12,6 +12,7 @@ Modules:
 - Network protocol
 - Network client
 - Network server
+- Working directory support
 - Gogs module
 
 Repository
@@ -82,6 +83,13 @@ Network server
 --------------
 
 ? todo
+
+Working directory support
+-------------------------
+
+- Reading and writing indexes
+- Checkouts
+- Tracking changes
 
 Gogs module
 -----------
