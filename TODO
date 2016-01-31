@@ -1,0 +1,91 @@
+Things to be implemented.
+
+Modules:
+=======
+
+- Repository
+- File storage
+- Pack handling
+- History traversal
+- Diff
+- Merge
+- Network protocol
+- Network client
+- Network server
+- Gogs module
+
+Repository
+----------
+
++ Object types and OID
++ Commit object
++ Raw object (and blob)
++ Tree object
+- Tag object
++ References (regular and special)
++ Resolving references
+? check completeness
+
+File storage
+------------
+
++ Loose objects
++ Packs
++ Refs
+? check completeness
+
+Pack handling
+-------------
+
++ Reading thick packs
+- Reading thin packs
+- Writing packs
+- Deltification
++ Undeltification
+? All sort of indexes
+? Network-related pack handling
+
+History traversal
+-----------------
+
++ Following commit graph
++ Walking commit graph with user handlers
++ Basic history simplification
+- Simple interface
+? Make comprehensive history traversal tests
+
+Diff
+----
+
+- Make diffs out of commits
+? todo
+
+Merge
+-----
+
+- Basic merge algorithm
+- Conflict-free merge
+- Merge with conflicts
+? todo
+
+Network protocol
+----------------
+
+? todo
+
+Network client
+--------------
+
+? todo
+
+Network server
+--------------
+
+? todo
+
+Gogs module
+-----------
+
+Make drop-in replacement for gogs 'git-module' package
+
+? investigate git-module
