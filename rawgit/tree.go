@@ -6,8 +6,12 @@ import (
 )
 
 const (
-	TreeEntryBufferSize = 1024
-	TreeDirectoryMode   = 040000
+	TreeEntryBufferSize    = 1024
+	TreeDirectoryMode      = 040000
+	TreeBlobMode           = 0100644
+	TreeExecutableBlobMode = 0100755
+	TreeSymlinkMode        = 0120000
+	TreeCommitMode         = 0160000
 )
 
 type Tree struct {
