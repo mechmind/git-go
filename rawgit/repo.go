@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+const (
+	RefPrefix   = "ref: "
+	RefBranchNS = "refs/heads/"
+)
+
 type ObjectWriter interface {
 	io.WriteCloser
 	GetOID() *OID
@@ -27,11 +32,27 @@ type Repository interface {
 
 type SimpleRepository struct {
 	Storage
-	RefDatabase
+	refdb RefDatabase
 }
 
 func NewRepository(storage Storage, refdb RefDatabase) *SimpleRepository {
 	return &SimpleRepository{storage, refdb}
+}
+
+func (repo *SimpleRepository) ReadRef(ref string) (string, error) {
+	// TODO: validate ref name. Allow only refs from 'refs/' directory and special refs
+	return repo.refdb.ReadRef(ref)
+}
+
+func (repo *SimpleRepository) WriteRef(ref, value string) error {
+	// TODO: validate ref name. Allow only refs from 'refs/' directory and special refs
+	// also validate ref value. It must be either object hash or another ref
+	return repo.refdb.WriteRef(ref, value)
+
+}
+
+func (repo *SimpleRepository) ListRefs(ns string) ([]string, error) {
+	return repo.refdb.ListRefs(ns)
 }
 
 func (repo *SimpleRepository) ResolveBranch(branch string) (*OID, error) {
@@ -154,7 +175,7 @@ func (repo *SimpleRepository) OpenCursor(commitOID *OID, path string) (*Cursor, 
 
 func (repo *SimpleRepository) ResolveRef(ref string) (*OID, error) {
 	for {
-		value, err := repo.RefDatabase.ReadRef(ref)
+		value, err := repo.refdb.ReadRef(ref)
 		if err != nil {
 			return nil, err
 		}

@@ -14,9 +14,7 @@ type Storage interface {
 type RefDatabase interface {
 	ListRefs(ns string) ([]string, error)
 	ReadRef(name string) (string, error)
-	ReadSpecialRef(ref SpecialRef) (string, error)
 	WriteRef(name, value string) error
-	WriteSpecialRef(ref SpecialRef, value string) error
 }
 
 type ReadOnly interface {

@@ -96,30 +96,3 @@ type ObjectInfo struct {
 	OType
 	Size uint64
 }
-
-type SpecialRef int8
-
-const (
-	RefHEAD SpecialRef = iota
-	RefFETCH_HEAD
-	RefORIG_HEAD
-	RefMERGE_HEAD
-	RefCHERRY_PICK_HEAD
-)
-
-func (ref SpecialRef) String() string {
-	switch ref {
-	case RefHEAD:
-		return "HEAD"
-	case RefFETCH_HEAD:
-		return "FETCH_HEAD"
-	case RefORIG_HEAD:
-		return "ORIG_HEAD"
-	case RefMERGE_HEAD:
-		return "MERGE_HEAD"
-	case RefCHERRY_PICK_HEAD:
-		return "CHERRY_PICK_HEAD"
-	default:
-		return "<invalid>"
-	}
-}

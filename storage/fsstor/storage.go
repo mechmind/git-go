@@ -98,19 +98,11 @@ func (r *FSStorage) CreateObject(objType rawgit.OType, size uint64) (rawgit.Obje
 
 func (r *FSStorage) ReadRef(ref string) (string, error) {
 	// read refs till object found
-	return readRefFile(r.fs, path.Join("refs", ref))
-}
-
-func (r *FSStorage) ReadSpecialRef(ref rawgit.SpecialRef) (string, error) {
-	return readRefFile(r.fs, ref.String())
+	return readRefFile(r.fs, ref)
 }
 
 func (r *FSStorage) WriteRef(ref, value string) error {
 	return writeRefFile(r.fs, path.Join("refs", ref), value)
-}
-
-func (r *FSStorage) WriteSpecialRef(ref rawgit.SpecialRef, value string) error {
-	return writeRefFile(r.fs, ref.String(), value)
 }
 
 func (r *FSStorage) ListRefs(ns string) ([]string, error) {
