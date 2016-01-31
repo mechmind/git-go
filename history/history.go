@@ -29,10 +29,10 @@ type WalkerCallback func(*rawgit.Commit) (WalkerAction, error)
 type CommitComparator func(current, parent *rawgit.Commit) bool
 
 type History struct {
-	repo *rawgit.Repository
+	repo rawgit.Repository
 }
 
-func New(repo *rawgit.Repository) *History {
+func New(repo rawgit.Repository) *History {
 	return &History{repo}
 }
 

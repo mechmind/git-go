@@ -18,7 +18,7 @@ func ExactCommitComparator(current, parent *rawgit.Commit) bool {
 	return current.GetOID().Equal(parent.GetOID())
 }
 
-func MakePathComparator(repo *rawgit.Repository, path string) CommitComparator {
+func MakePathComparator(repo rawgit.Repository, path string) CommitComparator {
 	return func(current, parent *rawgit.Commit) bool {
 		_, centry, cerr := repo.FindInTree(current.TreeOID, path)
 		_, pentry, perr := repo.FindInTree(parent.TreeOID, path)
@@ -31,7 +31,7 @@ func MakePathComparator(repo *rawgit.Repository, path string) CommitComparator {
 	}
 }
 
-func MakePathChecker(repo *rawgit.Repository, path string) (cb WalkerCallback) {
+func MakePathChecker(repo rawgit.Repository, path string) (cb WalkerCallback) {
 	return func(commit *rawgit.Commit) (WalkerAction, error) {
 		_, _, err := repo.FindInTree(commit.TreeOID, path)
 		if err != nil {

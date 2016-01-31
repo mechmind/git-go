@@ -5,11 +5,11 @@ import (
 	"github.com/mechmind/git-go/storage/fsstor"
 )
 
-func OpenRepository(path string) (*rawgit.Repository, error) {
+func OpenRepository(path string) (*Repository, error) {
 	storage, err := fsstor.OpenFSStorage(fsstor.NewOSFS(path))
 	if err != nil {
 		return nil, err
 	}
 
-	return rawgit.NewRepository(storage), nil
+	return NewRepository(rawgit.NewRepository(storage, storage)), nil
 }

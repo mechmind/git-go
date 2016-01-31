@@ -10,7 +10,7 @@ type Cursor struct {
 	commit *Commit
 	tree   *Tree
 	path   string
-	repo   *Repository
+	repo   Repository
 
 	err error
 }

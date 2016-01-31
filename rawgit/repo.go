@@ -10,23 +10,35 @@ type ObjectWriter interface {
 	GetOID() *OID
 }
 
-// Repo functions:
-// * raw object access (read, write, lookup)
-// * ref resolving
-// * history lookup?
-type Repository struct {
+type Repository interface {
 	Storage
+	RefDatabase
+	ReadOnly
+
+	ResolveBranch(branch string) (*OID, error)
+	ResolveRef(ref string) (*OID, error)
+
+	OpenCommit(oid *OID) (*Commit, error)
+	OpenTree(oid *OID) (*Tree, error)
+
+	Parents(commit *Commit) ([]*Commit, error)
+	FindInTree(oid *OID, path string) (OType, *OID, error)
 }
 
-func NewRepository(storage Storage) *Repository {
-	return &Repository{storage}
+type SimpleRepository struct {
+	Storage
+	RefDatabase
 }
 
-func (repo *Repository) ResolveBranch(branch string) (*OID, error) {
+func NewRepository(storage Storage, refdb RefDatabase) *SimpleRepository {
+	return &SimpleRepository{storage, refdb}
+}
+
+func (repo *SimpleRepository) ResolveBranch(branch string) (*OID, error) {
 	return repo.ResolveRef("heads/" + branch)
 }
 
-func (repo *Repository) OpenCommit(oid *OID) (*Commit, error) {
+func (repo *SimpleRepository) OpenCommit(oid *OID) (*Commit, error) {
 	info, body, err := repo.Storage.OpenObject(oid)
 	if err != nil {
 		return nil, err
@@ -45,7 +57,7 @@ func (repo *Repository) OpenCommit(oid *OID) (*Commit, error) {
 	return commit, nil
 }
 
-func (repo *Repository) Parents(commit *Commit) ([]*Commit, error) {
+func (repo *SimpleRepository) Parents(commit *Commit) ([]*Commit, error) {
 	if len(commit.ParentOIDs) == 0 {
 		return nil, nil
 	}
@@ -63,7 +75,7 @@ func (repo *Repository) Parents(commit *Commit) ([]*Commit, error) {
 	return parents, nil
 }
 
-func (repo *Repository) OpenTree(oid *OID) (*Tree, error) {
+func (repo *SimpleRepository) OpenTree(oid *OID) (*Tree, error) {
 	info, body, err := repo.Storage.OpenObject(oid)
 	if err != nil {
 		return nil, err
@@ -76,7 +88,7 @@ func (repo *Repository) OpenTree(oid *OID) (*Tree, error) {
 	return ReadTree(body)
 }
 
-func (repo *Repository) FindInTree(root *OID, path string) (OType, *OID, error) {
+func (repo *SimpleRepository) FindInTree(root *OID, path string) (OType, *OID, error) {
 	if path == "" {
 		return OTypeBad, nil, ErrInvalidPath
 	}
@@ -87,7 +99,7 @@ func (repo *Repository) FindInTree(root *OID, path string) (OType, *OID, error) 
 	return repo.find(root, parts)
 }
 
-func (repo *Repository) find(root *OID, parts []string) (OType, *OID, error) {
+func (repo *SimpleRepository) find(root *OID, parts []string) (OType, *OID, error) {
 	if len(parts) == 0 {
 		info, _, err := repo.StatObject(root)
 		if err != nil {
@@ -115,7 +127,7 @@ func (repo *Repository) find(root *OID, parts []string) (OType, *OID, error) {
 	return repo.find(item.GetOID(), parts[1:])
 }
 
-func (repo *Repository) OpenCursor(commitOID *OID, path string) (*Cursor, error) {
+func (repo *SimpleRepository) OpenCursor(commitOID *OID, path string) (*Cursor, error) {
 	commit, err := repo.OpenCommit(commitOID)
 	if err != nil {
 		return nil, err
@@ -140,9 +152,9 @@ func (repo *Repository) OpenCursor(commitOID *OID, path string) (*Cursor, error)
 	return cur, nil
 }
 
-func (repo *Repository) ResolveRef(ref string) (*OID, error) {
+func (repo *SimpleRepository) ResolveRef(ref string) (*OID, error) {
 	for {
-		value, err := repo.Storage.ReadRef(ref)
+		value, err := repo.RefDatabase.ReadRef(ref)
 		if err != nil {
 			return nil, err
 		}
@@ -153,6 +165,11 @@ func (repo *Repository) ResolveRef(ref string) (*OID, error) {
 			return ParseOID(value)
 		}
 	}
+}
+
+func (repo *SimpleRepository) IsReadOnly() bool {
+	// FIXME: query storage and db
+	return false
 }
 
 // TODO: tags
