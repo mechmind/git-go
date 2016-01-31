@@ -9,6 +9,8 @@ Modules:
 - History traversal
 - Diff
 - Merge
+- Config
+- Submodules
 - Network protocol
 - Network client
 - Network server
@@ -68,6 +70,18 @@ Merge
 - Conflict-free merge
 - Merge with conflicts
 ? todo
+
+Config
+------
+
+- Reading git config
+- Writing git config
+- Validating git config and parsed values
+
+Submodules
+----------
+
+? investigate sumbodules
 
 Network protocol
 ----------------
