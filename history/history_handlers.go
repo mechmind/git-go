@@ -65,7 +65,7 @@ func NopCallback(*rawgit.Commit) (WalkerAction, error) {
 	return TakeAndFollow, nil
 }
 
-func MakePager(repo *rawgit.Repository, cb WalkerCallback, skip int, count int) WalkerCallback {
+func MakePager(repo rawgit.Repository, cb WalkerCallback, skip int, count int) WalkerCallback {
 	if cb == nil {
 		cb = NopCallback
 	}
