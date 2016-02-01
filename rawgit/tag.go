@@ -6,6 +6,8 @@ import (
 )
 
 type Tag struct {
+	OID
+	OType
 	TargetOID   OID
 	TargetOType OType
 	Name        string
@@ -16,6 +18,8 @@ type Tag struct {
 func ReadTag(obj io.ReadCloser) (*Tag, error) {
 	var tag = new(Tag)
 	var infobuf = make([]byte, 1024)
+
+	tag.OType = OTypeTag
 
 	defer obj.Close()
 

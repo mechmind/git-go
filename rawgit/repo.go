@@ -160,7 +160,13 @@ func (repo *SimpleRepository) OpenTag(oid *OID) (*Tag, error) {
 		return nil, ErrNotATag
 	}
 
-	return ReadTag(body)
+	tag, err := ReadTag(body)
+	if err != nil {
+		return nil, err
+	}
+
+	tag.OID = *oid
+	return tag, nil
 }
 
 func (repo *SimpleRepository) OpenCursor(commitOID *OID, path string) (*Cursor, error) {
