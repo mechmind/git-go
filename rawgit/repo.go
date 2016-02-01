@@ -22,9 +22,11 @@ type Repository interface {
 
 	ResolveBranch(branch string) (*OID, error)
 	ResolveRef(ref string) (*OID, error)
+	ResolveTag(ref string) (*OID, OType, error)
 
 	OpenCommit(oid *OID) (*Commit, error)
 	OpenTree(oid *OID) (*Tree, error)
+	OpenTag(oid *OID) (*Tag, error)
 
 	Parents(commit *Commit) ([]*Commit, error)
 	FindInTree(oid *OID, path string) (OType, *OID, error)
@@ -56,7 +58,7 @@ func (repo *SimpleRepository) ListRefs(ns string) ([]string, error) {
 }
 
 func (repo *SimpleRepository) ResolveBranch(branch string) (*OID, error) {
-	return repo.ResolveRef("heads/" + branch)
+	return repo.ResolveRef("refs/heads/" + branch)
 }
 
 func (repo *SimpleRepository) OpenCommit(oid *OID) (*Commit, error) {
@@ -148,6 +150,19 @@ func (repo *SimpleRepository) find(root *OID, parts []string) (OType, *OID, erro
 	return repo.find(item.GetOID(), parts[1:])
 }
 
+func (repo *SimpleRepository) OpenTag(oid *OID) (*Tag, error) {
+	info, body, err := repo.OpenObject(oid)
+	if err != nil {
+		return nil, err
+	}
+
+	if info.GetOType() != OTypeTag {
+		return nil, ErrNotATag
+	}
+
+	return ReadTag(body)
+}
+
 func (repo *SimpleRepository) OpenCursor(commitOID *OID, path string) (*Cursor, error) {
 	commit, err := repo.OpenCommit(commitOID)
 	if err != nil {
@@ -188,9 +203,43 @@ func (repo *SimpleRepository) ResolveRef(ref string) (*OID, error) {
 	}
 }
 
+func (repo *SimpleRepository) ResolveTag(ref string) (*OID, OType, error) {
+	oid, err := repo.ResolveRef("refs/tags/" + ref)
+	if err != nil {
+		return nil, OTypeBad, err
+	}
+
+	info, _, err := repo.StatObject(oid)
+	if err != nil {
+		return nil, OTypeBad, err
+	}
+
+	if info.GetOType() == OTypeTag {
+		return FollowTag(repo, oid)
+	}
+
+	return oid, info.GetOType(), nil
+}
+
+func FollowTag(repo Repository, oid *OID) (*OID, OType, error) {
+	for {
+		tag, err := repo.OpenTag(oid)
+		if err != nil {
+			return nil, OTypeBad, err
+		}
+
+		oid = &tag.TargetOID
+		otype := tag.TargetOType
+		if otype == OTypeTag {
+			// follow this tag
+			continue
+		}
+
+		return oid, otype, nil
+	}
+}
+
 func (repo *SimpleRepository) IsReadOnly() bool {
 	// FIXME: query storage and db
 	return false
 }
-
-// TODO: tags

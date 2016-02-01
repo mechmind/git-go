@@ -24,7 +24,7 @@ Repository
 + Commit object
 + Raw object (and blob)
 + Tree object
-- Tag object
++ Tag object
 + References (regular and special)
 + Resolving references
 ? check completeness

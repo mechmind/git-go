@@ -50,6 +50,21 @@ func (ot OType) GetOType() OType {
 	return ot
 }
 
+func ParseOType(ot string) OType {
+	switch ot {
+	case "blob":
+		return OTypeBlob
+	case "tree":
+		return OTypeTree
+	case "commit":
+		return OTypeCommit
+	case "tag":
+		return OTypeTag
+	default:
+		return OTypeBad
+	}
+}
+
 type OID [20]byte
 
 func (oid *OID) String() string {
