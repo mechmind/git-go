@@ -63,7 +63,14 @@ func (r *FSStorage) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadClose
 }
 
 func (r *FSStorage) StatObject(oid *rawgit.OID) (rawgit.ObjectInfo, interface{}, error) {
-	return rawgit.ObjectInfo{}, nil, nil
+	info, closer, err := r.OpenObject(oid)
+	if err != nil {
+		return rawgit.ObjectInfo{}, nil, err
+	}
+
+	closer.Close()
+
+	return info, nil, nil
 }
 
 func (r *FSStorage) CreateObject(objType rawgit.OType, size uint64) (rawgit.ObjectWriter, error) {
