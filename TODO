@@ -27,6 +27,7 @@ Repository
 + Tag object
 + References (regular and special)
 + Resolving references
+- Time parsers
 ? check completeness
 
 File storage
