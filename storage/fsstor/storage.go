@@ -41,6 +41,11 @@ func (r *FSStorage) OpenObject(oid *rawgit.OID) (rawgit.ObjectInfo, io.ReadClose
 		return rawgit.ObjectInfo{}, nil, ErrObjectNotFound
 	}
 
+	return r.openLooseObject(oid, path)
+}
+
+func (r *FSStorage) openLooseObject(oid *rawgit.OID, path string) (rawgit.ObjectInfo, *objectReader, error) {
+
 	file, err := r.fs.Open(path)
 	if err != nil {
 		return rawgit.ObjectInfo{}, nil, err
@@ -101,6 +106,41 @@ func (r *FSStorage) CreateObject(objType rawgit.OType, size uint64) (rawgit.Obje
 	}
 
 	return writer, nil
+}
+
+func (r *FSStorage) MatchObjectsPrefix(prefix string) ([]rawgit.ObjectInfo, error) {
+	// FIXME: also search in packs
+	result := []rawgit.ObjectInfo{}
+	if prefix == "" {
+		prefix = "??"
+	} else if len(prefix) == 1 {
+		prefix += "?"
+	}
+
+	pattern := "objects/" + prefix[:2] + "/" + prefix[2:] + "*"
+	entries, err := Glob(r.fs, pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		parts := strings.Split(entry, "/")
+		oid, err := rawgit.ParseOID(parts[1] + parts[2])
+		if err != nil {
+			// wtf?
+			return nil, err
+		}
+
+		info, closer, err := r.openLooseObject(oid, entry)
+		if err != nil {
+			continue
+		}
+		closer.Close()
+
+		result = append(result, info)
+	}
+
+	return result, nil
 }
 
 func (r *FSStorage) ReadRef(ref string) (string, error) {
@@ -174,13 +214,13 @@ type objectReader struct {
 	io.Reader
 }
 
-func (o objectReader) Close() error {
+func (o *objectReader) Close() error {
 	return o.source.Close()
 }
 
-func newObjectReader(source io.ReadCloser, size uint64) objectReader {
+func newObjectReader(source io.ReadCloser, size uint64) *objectReader {
 	// FIXME: reimplement limitreader to use uint64 for strict compatibility
-	return objectReader{source, io.LimitReader(source, int64(size))}
+	return &objectReader{source, io.LimitReader(source, int64(size))}
 }
 
 type objectWriter struct {

@@ -7,6 +7,7 @@ import (
 type Storage interface {
 	OpenObject(oid *OID) (ObjectInfo, io.ReadCloser, error)
 	StatObject(oid *OID) (ObjectInfo, interface{}, error)
+	MatchObjectsPrefix(prefix string) ([]ObjectInfo, error)
 	CreateObject(objType OType, size uint64) (ObjectWriter, error)
 	IsObjectExist(oid *OID) bool
 }

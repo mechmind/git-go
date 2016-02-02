@@ -245,6 +245,34 @@ func FollowTag(repo Repository, oid *OID) (*OID, OType, error) {
 	}
 }
 
+func ResolveName(repo Repository, name string) (*OID, error) {
+	if strings.Index(name, "/") < 0 {
+		infos, err := repo.MatchObjectsPrefix(name)
+		if err == nil {
+			switch len(infos) {
+			case 0:
+				break
+			case 1:
+				return infos[0].GetOID(), nil
+			default:
+				return nil, ErrAmbiguousShortHash
+			}
+		}
+	}
+
+	_, err := repo.ReadRef(name)
+	if err != nil {
+		if !IsNotExist(err) {
+			return nil, err
+		}
+	} else {
+		// FIXME: ReadRef api call should be more useful
+		return repo.ResolveRef(name)
+	}
+
+	return nil, ErrNotFound
+}
+
 func (repo *SimpleRepository) IsReadOnly() bool {
 	// FIXME: query storage and db
 	return false

@@ -55,3 +55,10 @@ var ErrBufferDepleted = errors.New("buffer depleted")
 var ErrAlreadyClosed = errors.New("already closed")
 
 var ErrInvalidRef = errors.New("invalid ref")
+
+var ErrAmbiguousShortHash = errors.New("ambiguous short object hash")
+
+func IsNotExist(err error) bool {
+	// FIXME: make actual implementation
+	return false
+}

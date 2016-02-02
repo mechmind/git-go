@@ -16,6 +16,11 @@ type FS interface {
 	Move(from string, to string) error
 	ListDir(path string) ([]string, error)
 	IsFileExist(path string) bool
+	IsDir(path string) bool
 
 	IsReadOnly() bool
+}
+
+type Globber interface {
+	Glob(pattern string) ([]string, error)
 }

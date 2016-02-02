@@ -77,9 +77,22 @@ func (o OSFS) IsFileExist(path string) bool {
 	}
 }
 
+func (o OSFS) IsDir(path string) bool {
+	fi, err := os.Stat(filepath.Join(o.root, path))
+	if err != nil {
+		return false
+	}
+	return fi.IsDir()
+}
+
 func (o OSFS) IsReadOnly() bool {
 	// TODO: check for write permissions
 	return false
+}
+
+// rawgit.Globber interface
+func (o OSFS) Glob(pattern string) ([]string, error) {
+	return filepath.Glob(filepath.Join(o.root, pattern))
 }
 
 type tmpFileRemover struct {
