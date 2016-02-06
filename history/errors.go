@@ -5,3 +5,4 @@ import (
 )
 
 var ErrNotFound = errors.New("not found")
+var ErrTooFewRoots = errors.New("too few roots")
