@@ -16,23 +16,14 @@ type CommitTraceItem struct {
 	traceMark int
 }
 
-func (hist *History) FindMergeBase(roots ...*rawgit.Commit) (*rawgit.Commit, error) {
+func (hist *History) Find3WayMergeBase(roots ...*rawgit.Commit) (*rawgit.Commit, error) {
 	if len(roots) < 2 {
 		return nil, ErrTooFewRoots
 	}
 
 	seen := NewCommitTraceMap()
 
-	// FIXME: consider other roots
-	return hist.findMergeBaseOf2(roots[0], roots[1], seen)
-}
-
-func (hist *History) Find3WayMergeBase(roots ...*rawgit.Commit) (*rawgit.Commit, error) {
-	if len(roots) < 2 {
-		return nil, ErrTooFewRoots
-	}
-
-	return nil, nil
+	return hist.findMergeBase(seen, roots[0], roots[1:]...)
 }
 
 func haveNonStale(roots []*CommitTraceItem) bool {
@@ -45,17 +36,22 @@ func haveNonStale(roots []*CommitTraceItem) bool {
 	return false
 }
 
-func (hist *History) findMergeBaseOf2(left, right *rawgit.Commit, trace CommitTraceMap) (*rawgit.Commit, error) {
-	if left.GetOID().Equal(right.GetOID()) {
-		return left, nil
+func (hist *History) findMergeBase(trace CommitTraceMap, left *rawgit.Commit, rights ...*rawgit.Commit) (*rawgit.Commit, error) {
+	for _, commit := range rights {
+		if left.GetOID().Equal(commit.GetOID()) {
+			return left, nil
+		}
 	}
 
 	traceLeft := trace.Get(left)
 	traceLeft.traceMark |= TraceP1
-	traceRight := trace.Get(right)
-	traceRight.traceMark |= TraceP2
+	roots := []*CommitTraceItem{traceLeft}
 
-	roots := []*CommitTraceItem{traceLeft, traceRight}
+	for _, commit := range rights {
+		traceRight := trace.Get(commit)
+		traceRight.traceMark |= TraceP2
+		roots = append(roots, traceRight)
+	}
 
 	result := []*CommitTraceItem{}
 
